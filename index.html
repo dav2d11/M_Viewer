@@ -187,7 +187,19 @@
     border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
     color: #fff; font-size: 15px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px); margin-left: 8px;
+  }
+  #hud-first-single {
+    width: 30px; height: 30px; background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+    color: rgba(255,255,255,0.65); font-size: 11px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px); flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    title: '첫 페이지 단독';
+  }
+  #hud-first-single.active {
+    background: rgba(255,107,53,0.35); border-color: var(--accent); color: var(--accent);
   }
   #hud-title { flex: 1; font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.9); }
   #hud-page  { font-size: 11px; color: rgba(255,255,255,0.5); font-family: monospace; }
@@ -306,9 +318,10 @@
 
     <!-- HUD -->
     <div id="hud">
-      <button id="hud-menu" onclick="toggleSidebar()">☰</button>
       <span id="hud-title"></span>
       <span id="hud-page"></span>
+      <button id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
+      <button id="hud-menu" onclick="toggleSidebar()">☰</button>
     </div>
 
     <!-- 끝 화면 -->
@@ -344,6 +357,7 @@ const fullscreenToggle = document.getElementById('fullscreen-toggle');
 imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
 firstSingleInput.addEventListener('change', () => {
   saveFirstSingle(firstSingleInput.checked);
+  syncFirstSingleHUD();
   if (curEp) {
     const spreads = getSpreads(episodes[curEp]);
     if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
@@ -356,6 +370,7 @@ document.addEventListener('fullscreenchange', syncFullscreenToggle);
 initImageScale();
 initFirstSingle();
 syncFullscreenToggle();
+syncFirstSingleHUD();
 
 // ── 파일 선택 ──────────────────────────────────────────
 document.getElementById('file-input').addEventListener('change', e => {
@@ -616,6 +631,24 @@ async function toggleFullscreen(enabled) {
 
 function syncFullscreenToggle() {
   fullscreenToggle.checked = !!document.fullscreenElement;
+}
+
+function syncFirstSingleHUD() {
+  const btn = document.getElementById('hud-first-single');
+  if (!btn) return;
+  if (firstSingleInput.checked) btn.classList.add('active');
+  else btn.classList.remove('active');
+}
+
+function toggleFirstSingleHUD() {
+  firstSingleInput.checked = !firstSingleInput.checked;
+  saveFirstSingle(firstSingleInput.checked);
+  syncFirstSingleHUD();
+  if (curEp) {
+    const spreads = getSpreads(episodes[curEp]);
+    if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
+    drawSpread();
+  }
 }
 
 // ── 사이드바 ───────────────────────────────────────────
