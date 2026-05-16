@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>만화 뷰어</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #111113; --surface: #1c1c1f; --surface2: #27272b;
+    --border: #333338; --accent: #ff6b35; --text: #f0ede8;
+    --text2: #888680; --text3: #444240; --sidebar-w: 240px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: #000; color: var(--text); font-family: 'Noto Sans KR', sans-serif; overflow: hidden; user-select: none; }
+
+  /* 업로드 화면 */
+  #upload-screen {
+    height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: var(--bg); position: relative; overflow: hidden;
+  }
+  #upload-screen::before {
+    content: ''; position: absolute; width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(255,107,53,0.07) 0%, transparent 70%);
+    top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none;
+  }
+  .upload-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: clamp(44px,10vw,76px);
+    letter-spacing: 0.08em; line-height: 1; margin-bottom: 8px;
+  }
+  .upload-title span { color: var(--accent); }
+  .upload-sub { font-size: 13px; color: var(--text2); margin-bottom: 44px; }
+  #drop-zone {
+    width: min(400px,88vw); border: 2px dashed var(--border); border-radius: 16px;
+    padding: 44px 28px; display: flex; flex-direction: column; align-items: center;
+    gap: 14px; cursor: pointer; transition: all 0.2s; background: var(--surface); position: relative;
+  }
+  #drop-zone:hover { border-color: var(--accent); background: rgba(255,107,53,0.04); }
+  #drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 38px; }
+  .drop-text { font-size: 15px; font-weight: 700; }
+  .drop-sub { font-size: 12px; color: var(--text2); text-align: center; line-height: 1.7; }
+  .drop-btn {
+    margin-top: 6px; background: var(--accent); color: #fff; border: none;
+    padding: 11px 30px; border-radius: 8px; font-size: 14px; font-weight: 700;
+    font-family: 'Noto Sans KR', sans-serif; pointer-events: none;
+  }
+
+  /* 뷰어 앱 */
+  #viewer-app { display: none; height: 100vh; position: relative; }
+
+  /* 사이드바 오버레이 */
+  #sb-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6); z-index: 40;
+  }
+  #sb-overlay.open { display: block; }
+
+  /* 사이드바 */
+  #sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  #sidebar.open { transform: translateX(0); box-shadow: 8px 0 30px rgba(0,0,0,0.6); }
+
+  .sb-head { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .sb-head h2 { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.06em; color: var(--accent); }
+  .sb-head p { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .sb-controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  #btn-reset {
+    font-size: 10px; color: var(--text3); background: none;
+    border: 1px solid var(--border); padding: 4px 10px; border-radius: 4px;
+    cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s;
+  }
+  #btn-reset:hover { color: var(--text2); border-color: var(--text2); }
+
+  /* 정주행 토글 */
+  .binge-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; cursor: pointer; }
+  .binge-wrap span { font-size: 11px; color: var(--text2); }
+  .binge-wrap input { display: none; }
+  .t-track {
+    width: 32px; height: 18px; background: var(--border);
+    border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0;
+  }
+  .binge-wrap input:checked ~ .t-track { background: var(--accent); }
+  .t-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; background: #fff; border-radius: 50%; transition: left 0.2s;
+  }
+  .binge-wrap input:checked ~ .t-track .t-thumb { left: 16px; }
+
+  #ep-list { flex: 1; overflow-y: auto; padding: 6px 0; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .ep-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 16px; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s;
+  }
+  .ep-item:hover { background: var(--surface2); }
+  .ep-item.active { border-left-color: var(--accent); background: var(--surface2); }
+  .ep-item.active .ep-label { color: var(--accent); }
+  .ep-label { font-size: 13px; font-weight: 700; }
+  .ep-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .ep-pages { font-size: 10px; color: var(--text3); }
+  .ep-prog { font-size: 9px; color: var(--accent); }
+
+  /* 리더 */
+  #reader { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; position: relative; }
+
+  /* 스프레드 */
+  #spread { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  #pg-right { height: 100%; width: 50%; display: flex; align-items: center; justify-content: flex-end; }
+  #pg-left  { height: 100%; width: 50%; display: flex; align-items: center; justify-content: flex-start; }
+  #pg-right img, #pg-left img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  #spread.single #pg-right { width: 100%; justify-content: center; }
+  #spread.single #pg-left  { display: none; }
+
+  /* 탭 존 */
+  .zone { position: absolute; top: 0; bottom: 0; z-index: 10; cursor: pointer; }
+  #z-left   { left: 0;   width: 30%; }
+  #z-center { left: 30%; width: 40%; }
+  #z-right  { right: 0;  width: 30%; }
+
+  /* 화살표 오버레이 */
+  #nav-ov {
+    position: absolute; inset: 0; z-index: 15;
+    display: none; align-items: center; justify-content: space-between;
+    pointer-events: none;
+  }
+  #nav-ov.visible { display: flex; }
+  .arr-btn {
+    width: 64px; height: 100%; display: flex; align-items: center; justify-content: center;
+    pointer-events: all; cursor: pointer;
+    background: linear-gradient(to right, rgba(0,0,0,0.4), transparent);
+    transition: background 0.15s;
+  }
+  .arr-btn.right { background: linear-gradient(to left, rgba(0,0,0,0.4), transparent); }
+  .arr-btn:hover { background: linear-gradient(to right, rgba(255,107,53,0.3), transparent); }
+  .arr-btn.right:hover { background: linear-gradient(to left, rgba(255,107,53,0.3), transparent); }
+  .arr-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: #fff; backdrop-filter: blur(4px);
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  #hud.visible { opacity: 1; pointer-events: all; }
+  #hud-menu {
+    width: 36px; height: 36px; background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+    color: #fff; font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  #hud-title { flex: 1; font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.9); }
+  #hud-page  { font-size: 11px; color: rgba(255,255,255,0.5); font-family: monospace; }
+
+  /* 끝 화면 */
+  #end-screen {
+    display: none; position: absolute; inset: 0; z-index: 30;
+    background: rgba(0,0,0,0.88); backdrop-filter: blur(10px);
+    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  }
+  #end-screen.visible { display: flex; }
+  .end-icon { font-size: 54px; }
+  .end-title { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 0.1em; }
+  .end-sub { font-size: 13px; color: var(--text2); }
+  .end-btn {
+    margin-top: 8px; background: var(--accent); color: #fff; border: none;
+    padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: 700;
+    font-family: 'Noto Sans KR', sans-serif; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .end-btn:hover { opacity: 0.85; }
+
+  /* 토스트 */
+  #toast {
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+    background: rgba(30,30,32,0.95); color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px 22px; border-radius: 20px; font-size: 13px; font-weight: 700;
+    z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    white-space: nowrap; backdrop-filter: blur(8px);
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- 시작 화면 -->
+<div id="upload-screen">
+  <div class="upload-title">MANGA<span>.</span>VIEWER</div>
+  <div class="upload-sub">이미지 폴더를 선택하면 바로 시작됩니다</div>
+  <div id="drop-zone">
+    <input type="file" id="file-input" multiple accept="image/*" webkitdirectory>
+    <div class="drop-icon">📂</div>
+    <div class="drop-text">이미지 폴더 선택</div>
+    <div class="drop-sub">p001_001.jpg 형식으로 저장된<br>이미지 폴더를 선택해주세요</div>
+    <button class="drop-btn">폴더 열기</button>
+  </div>
+</div>
+
+<!-- 뷰어 -->
+<div id="viewer-app">
+  <div id="sb-overlay" onclick="closeSidebar()"></div>
+
+  <aside id="sidebar">
+    <div class="sb-head">
+      <h2>MANGA VIEWER</h2>
+      <p id="total-label"></p>
+      <div class="sb-controls">
+        <button id="btn-reset" onclick="resetApp()">← 폴더 재선택</button>
+        <label class="binge-wrap" title="정주행: 회차 끝에서 다음 회차 자동 진행">
+          <input type="checkbox" id="binge" checked>
+          <span>정주행</span>
+          <div class="t-track"><div class="t-thumb"></div></div>
+        </label>
+      </div>
+    </div>
+    <div id="ep-list"></div>
+  </aside>
+
+  <div id="reader">
+    <div id="spread">
+      <div id="pg-right"><img id="img-r" src="" alt=""></div>
+      <div id="pg-left"><img id="img-l" src="" alt=""></div>
+    </div>
+
+    <!-- 탭 존 -->
+    <div class="zone" id="z-left"   onclick="tapLeft()"></div>
+    <div class="zone" id="z-center" onclick="tapCenter()"></div>
+    <div class="zone" id="z-right"  onclick="tapRight()"></div>
+
+    <!-- 화살표 -->
+    <div id="nav-ov">
+      <div class="arr-btn"       onclick="tapLeft()"> <div class="arr-icon">‹</div></div>
+      <div style="flex:1"></div>
+      <div class="arr-btn right" onclick="tapRight()"><div class="arr-icon">›</div></div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <button id="hud-menu" onclick="toggleSidebar()">☰</button>
+      <span id="hud-title"></span>
+      <span id="hud-page"></span>
+    </div>
+
+    <!-- 끝 화면 -->
+    <div id="end-screen">
+      <div class="end-icon">📚</div>
+      <div class="end-title" id="end-title">완독!</div>
+      <div class="end-sub"   id="end-sub"></div>
+      <button class="end-btn" onclick="closeEnd()">목록 보기</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const STORE_KEY = 'manga_progress_v1';
+
+let episodes = {};
+let epKeys   = [];
+let curEp    = null;
+let curPair  = 0;
+let navOn    = false;
+let navTimer = null;
+let urls     = [];   // revoke 대상 Object URL
+
+// ── 파일 선택 ──────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', e => {
+  const pat = /p(\d+)_\d+\.(jpe?g|png|gif|webp)/i;
+  episodes = {};
+
+  Array.from(e.target.files).forEach(f => {
+    const m = f.name.match(pat);
+    if (!m) return;
+    const ep = +m[1];
+    (episodes[ep] = episodes[ep] || []).push(f);
+  });
+
+  Object.values(episodes).forEach(arr =>
+    arr.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+  );
+
+  epKeys = Object.keys(episodes).map(Number).sort((a, b) => a - b);
+
+  if (!epKeys.length) { alert('p001_001.jpg 형식 파일을 찾을 수 없어요.'); return; }
+
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('viewer-app').style.display   = 'block';
+  document.getElementById('total-label').textContent = `총 ${epKeys.length}화`;
+
+  renderList();
+
+  const saved = loadProg();
+  if (saved && episodes[saved.ep]) {
+    loadEp(saved.ep, saved.pair);
+    showToast(`${saved.ep}화 ${saved.pair * 2 + 1}p 부터 이어보기`);
+  } else {
+    loadEp(epKeys[0], 0);
+  }
+});
+
+// ── 목록 렌더 ──────────────────────────────────────────
+function renderList() {
+  const saved = loadProg();
+  document.getElementById('ep-list').innerHTML = epKeys.map(ep => {
+    const total = Math.ceil(episodes[ep].length / 2);
+    const isMe  = saved && saved.ep === ep;
+    const pct   = isMe ? Math.min(100, Math.round(((saved.pair + 1) / total) * 100)) : null;
+    return `<div class="ep-item ${curEp === ep ? 'active' : ''}" id="ei-${ep}" onclick="loadEp(${ep},0)">
+      <span class="ep-label">${ep}화</span>
+      <div class="ep-meta">
+        <span class="ep-pages">${episodes[ep].length}p</span>
+        ${pct !== null ? `<span class="ep-prog">${pct}%</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 회차 로드 ──────────────────────────────────────────
+function loadEp(ep, pair = 0) {
+  urls.forEach(u => URL.revokeObjectURL(u));
+  urls = [];
+
+  if (curEp !== null) {
+    const prev = document.getElementById(`ei-${curEp}`);
+    if (prev) prev.classList.remove('active');
+  }
+
+  curEp  = ep;
+  curPair = pair;
+
+  const el = document.getElementById(`ei-${ep}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
+
+  closeSidebar();
+  document.getElementById('end-screen').classList.remove('visible');
+  drawSpread();
+}
+
+// ── 스프레드 그리기 ────────────────────────────────────
+function drawSpread() {
+  const files = episodes[curEp];
+  const pairs = Math.ceil(files.length / 2);
+
+  if (curPair < 0) curPair = 0;
+  if (curPair >= pairs) { handleEnd(); return; }
+
+  const rFile = files[curPair * 2];
+  const lFile = files[curPair * 2 + 1];
+
+  const spread = document.getElementById('spread');
+  const imgR   = document.getElementById('img-r');
+  const imgL   = document.getElementById('img-l');
+
+  const uR = URL.createObjectURL(rFile); urls.push(uR); imgR.src = uR;
+  if (lFile) {
+    const uL = URL.createObjectURL(lFile); urls.push(uL); imgL.src = uL;
+    spread.classList.remove('single');
+  } else {
+    imgL.src = ''; spread.classList.add('single');
+  }
+
+  saveProg(curEp, curPair);
+  updateHUD();
+  renderList();
+}
+
+// ── 탭 처리 ────────────────────────────────────────────
+function tapLeft() {                                      // 다음 페이지
+  const pairs = Math.ceil(episodes[curEp].length / 2);
+  if (curPair + 1 < pairs) { curPair++; drawSpread(); }
+  else handleEnd();
+  hideNav();
+}
+
+function tapRight() {                                     // 이전 페이지
+  if (curPair > 0) { curPair--; drawSpread(); }
+  else {
+    const idx = epKeys.indexOf(curEp);
+    if (idx > 0) {
+      const prev = epKeys[idx - 1];
+      loadEp(prev, Math.ceil(episodes[prev].length / 2) - 1);
+      showToast(`${prev}화`);
+    } else {
+      showToast('첫 번째 화입니다');
+    }
+  }
+  hideNav();
+}
+
+function tapCenter() { toggleNav(); }
+
+// ── 회차 끝 처리 ───────────────────────────────────────
+function handleEnd() {
+  const binge = document.getElementById('binge').checked;
+  const idx   = epKeys.indexOf(curEp);
+
+  if (binge && idx < epKeys.length - 1) {
+    const next = epKeys[idx + 1];
+    loadEp(next, 0);
+    showToast(`${next}화 시작`);
+  } else {
+    document.getElementById('end-title').textContent = idx >= epKeys.length - 1 ? '완독!' : `${curEp}화 완료`;
+    document.getElementById('end-sub').textContent   = idx >= epKeys.length - 1
+      ? `${curEp}화까지 모두 읽었어요 🎉`
+      : '다음 화를 선택하세요';
+    document.getElementById('end-screen').classList.add('visible');
+  }
+}
+
+function closeEnd() {
+  document.getElementById('end-screen').classList.remove('visible');
+  openSidebar();
+}
+
+// ── 네비 화살표 ────────────────────────────────────────
+function toggleNav() { navOn ? hideNav() : showNav(); }
+function showNav() {
+  navOn = true;
+  document.getElementById('nav-ov').classList.add('visible');
+  document.getElementById('hud').classList.add('visible');
+  clearTimeout(navTimer);
+  navTimer = setTimeout(hideNav, 3000);
+}
+function hideNav() {
+  navOn = false;
+  document.getElementById('nav-ov').classList.remove('visible');
+  document.getElementById('hud').classList.remove('visible');
+}
+
+// ── HUD ────────────────────────────────────────────────
+function updateHUD() {
+  if (!curEp) return;
+  const total = episodes[curEp].length;
+  document.getElementById('hud-title').textContent = `${curEp}화`;
+  document.getElementById('hud-page').textContent  =
+    `${curPair * 2 + 1}–${Math.min(curPair * 2 + 2, total)} / ${total}p`;
+}
+
+// ── 사이드바 ───────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+}
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sb-overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sb-overlay').classList.remove('open');
+}
+
+// ── 토스트 ─────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── 진행 저장 ──────────────────────────────────────────
+function saveProg(ep, pair) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ep, pair })); } catch(e) {}
+}
+function loadProg() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch(e) { return null; }
+}
+
+// ── 리셋 ───────────────────────────────────────────────
+function resetApp() {
+  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+  curEp = null; episodes = {}; epKeys = [];
+  document.getElementById('viewer-app').style.display    = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+  document.getElementById('file-input').value = '';
+}
+
+// ── 키보드 단축키 ──────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!curEp) return;
+  if (e.key === 'ArrowLeft')  tapLeft();
+  if (e.key === 'ArrowRight') tapRight();
+  if (e.key === ' ')          { e.preventDefault(); toggleNav(); }
+  if (e.key === 'Escape')     closeSidebar();
+});
+</script>
+</body>
+</html>
