@@ -96,6 +96,17 @@
   .size-control {
     margin-top: 12px; display: flex; flex-direction: column; gap: 7px;
   }
+  .toggle-group {
+    margin-top: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .toggle-copy {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .toggle-copy strong { font-size: 11px; color: var(--text); }
+  .toggle-copy span { font-size: 10px; color: var(--text3); }
   .size-head {
     display: flex; align-items: center; justify-content: space-between;
     font-size: 11px; color: var(--text2);
@@ -249,6 +260,28 @@
         </div>
         <input type="range" id="img-size" min="70" max="130" step="5" value="100">
       </div>
+      <div class="toggle-group">
+        <div class="toggle-row" title="첫 페이지를 단독으로 표시합니다">
+          <div class="toggle-copy">
+            <strong>첫 페이지 단독</strong>
+            <span>표지처럼 1페이지만 먼저 표시</span>
+          </div>
+          <label class="binge-wrap">
+            <input type="checkbox" id="first-single">
+            <div class="t-track"><div class="t-thumb"></div></div>
+          </label>
+        </div>
+        <div class="toggle-row" title="브라우저 전체 화면으로 전환합니다">
+          <div class="toggle-copy">
+            <strong>전체 화면</strong>
+            <span>동영상처럼 화면 전체로 보기</span>
+          </div>
+          <label class="binge-wrap">
+            <input type="checkbox" id="fullscreen-toggle">
+            <div class="t-track"><div class="t-thumb"></div></div>
+          </label>
+        </div>
+      </div>
     </div>
     <div id="ep-list"></div>
   </aside>
@@ -293,6 +326,7 @@
 <script>
 const STORE_KEY = 'manga_progress_v1';
 const IMG_SIZE_KEY = 'manga_img_scale_v1';
+const FIRST_SINGLE_KEY = 'manga_first_single_v1';
 
 let episodes = {};
 let epKeys   = [];
@@ -304,9 +338,24 @@ let urls     = [];   // revoke 대상 Object URL
 
 const imgSizeInput = document.getElementById('img-size');
 const imgSizeLabel = document.getElementById('img-size-label');
+const firstSingleInput = document.getElementById('first-single');
+const fullscreenToggle = document.getElementById('fullscreen-toggle');
 
 imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
+firstSingleInput.addEventListener('change', () => {
+  saveFirstSingle(firstSingleInput.checked);
+  if (curEp) {
+    const spreads = getSpreads(episodes[curEp]);
+    if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
+    drawSpread();
+  }
+});
+fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
+document.addEventListener('fullscreenchange', syncFullscreenToggle);
+
 initImageScale();
+initFirstSingle();
+syncFullscreenToggle();
 
 // ── 파일 선택 ──────────────────────────────────────────
 document.getElementById('file-input').addEventListener('change', e => {
@@ -337,7 +386,7 @@ document.getElementById('file-input').addEventListener('change', e => {
   const saved = loadProg();
   if (saved && episodes[saved.ep]) {
     loadEp(saved.ep, saved.pair);
-    showToast(`${saved.ep}화 ${saved.pair * 2 + 1}p 부터 이어보기`);
+    showToast(getResumeToast(saved.ep, saved.pair));
   } else {
     loadEp(epKeys[0], 0);
   }
@@ -347,7 +396,7 @@ document.getElementById('file-input').addEventListener('change', e => {
 function renderList() {
   const saved = loadProg();
   document.getElementById('ep-list').innerHTML = epKeys.map(ep => {
-    const total = Math.ceil(episodes[ep].length / 2);
+    const total = getSpreads(episodes[ep]).length;
     const isMe  = saved && saved.ep === ep;
     const pct   = isMe ? Math.min(100, Math.round(((saved.pair + 1) / total) * 100)) : null;
     return `<div class="ep-item ${curEp === ep ? 'active' : ''}" id="ei-${ep}" onclick="loadEp(${ep},0)">
@@ -384,24 +433,29 @@ function loadEp(ep, pair = 0) {
 // ── 스프레드 그리기 ────────────────────────────────────
 function drawSpread() {
   const files = episodes[curEp];
-  const pairs = Math.ceil(files.length / 2);
+  const spreads = getSpreads(files);
 
   if (curPair < 0) curPair = 0;
-  if (curPair >= pairs) { handleEnd(); return; }
+  if (curPair >= spreads.length) { handleEnd(); return; }
 
-  const firstFile  = files[curPair * 2];
-  const secondFile = files[curPair * 2 + 1];
+  const currentSpread = spreads[curPair];
+  const rightFile = currentSpread.right;
+  const leftFile = currentSpread.left;
 
   const spread = document.getElementById('spread');
   const imgR   = document.getElementById('img-r');
   const imgL   = document.getElementById('img-l');
 
-  if (secondFile) {
-    const uR = URL.createObjectURL(secondFile); urls.push(uR); imgR.src = uR;
-    const uL = URL.createObjectURL(firstFile); urls.push(uL); imgL.src = uL;
+  if (rightFile) {
+    const uR = URL.createObjectURL(rightFile); urls.push(uR); imgR.src = uR;
+  } else {
+    imgR.src = '';
+  }
+
+  if (leftFile) {
+    const uL = URL.createObjectURL(leftFile); urls.push(uL); imgL.src = uL;
     spread.classList.remove('single');
   } else {
-    const uR = URL.createObjectURL(firstFile); urls.push(uR); imgR.src = uR;
     imgL.src = '';
     spread.classList.add('single');
   }
@@ -413,8 +467,8 @@ function drawSpread() {
 
 // ── 탭 처리 ────────────────────────────────────────────
 function tapLeft() {                                      // 다음 페이지
-  const pairs = Math.ceil(episodes[curEp].length / 2);
-  if (curPair + 1 < pairs) { curPair++; drawSpread(); }
+  const spreads = getSpreads(episodes[curEp]);
+  if (curPair + 1 < spreads.length) { curPair++; drawSpread(); }
   else handleEnd();
   hideNav();
 }
@@ -425,7 +479,7 @@ function tapRight() {                                     // 이전 페이지
     const idx = epKeys.indexOf(curEp);
     if (idx > 0) {
       const prev = epKeys[idx - 1];
-      loadEp(prev, Math.ceil(episodes[prev].length / 2) - 1);
+      loadEp(prev, getSpreads(episodes[prev]).length - 1);
       showToast(`${prev}화`);
     } else {
       showToast('첫 번째 화입니다');
@@ -477,12 +531,13 @@ function hideNav() {
 // ── HUD ────────────────────────────────────────────────
 function updateHUD() {
   if (!curEp) return;
+  const spreads = getSpreads(episodes[curEp]);
+  const spread = spreads[curPair];
   const total = episodes[curEp].length;
-  const firstPage = curPair * 2 + 1;
-  const secondPage = curPair * 2 + 2;
+  if (!spread) return;
   document.getElementById('hud-title').textContent = `${curEp}화`;
   document.getElementById('hud-page').textContent  =
-    secondPage <= total ? `${secondPage}, ${firstPage} / ${total}p` : `${firstPage} / ${total}p`;
+    spread.pages.length === 2 ? `${spread.pages[0]}, ${spread.pages[1]} / ${total}p` : `${spread.pages[0]} / ${total}p`;
 }
 
 function initImageScale() {
@@ -502,6 +557,65 @@ function applyImageScale(value, persist = true) {
   if (persist) {
     try { localStorage.setItem(IMG_SIZE_KEY, String(scale)); } catch (e) {}
   }
+}
+
+function initFirstSingle() {
+  let enabled = false;
+  try { enabled = localStorage.getItem(FIRST_SINGLE_KEY) === 'true'; } catch (e) {}
+  firstSingleInput.checked = enabled;
+}
+
+function saveFirstSingle(enabled) {
+  try { localStorage.setItem(FIRST_SINGLE_KEY, String(enabled)); } catch (e) {}
+}
+
+function getSpreads(files) {
+  const spreads = [];
+  if (!files || !files.length) return spreads;
+
+  let start = 0;
+  if (firstSingleInput.checked) {
+    spreads.push({ right: files[0], left: null, pages: [1] });
+    start = 1;
+  }
+
+  for (let i = start; i < files.length; i += 2) {
+    const first = files[i];
+    const second = files[i + 1];
+    if (second) {
+      spreads.push({ right: second, left: first, pages: [i + 2, i + 1] });
+    } else {
+      spreads.push({ right: first, left: null, pages: [i + 1] });
+    }
+  }
+
+  return spreads;
+}
+
+function getResumeToast(ep, pair) {
+  const spreads = getSpreads(episodes[ep]);
+  const spread = spreads[pair];
+  if (!spread) return `${ep}화 이어보기`;
+  return spread.pages.length === 2
+    ? `${ep}화 ${spread.pages[0]}, ${spread.pages[1]}p 부터 이어보기`
+    : `${ep}화 ${spread.pages[0]}p 부터 이어보기`;
+}
+
+async function toggleFullscreen(enabled) {
+  try {
+    if (enabled) {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+    } else if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    }
+  } catch (e) {
+    showToast('전체 화면 전환을 사용할 수 없어요');
+    syncFullscreenToggle();
+  }
+}
+
+function syncFullscreenToggle() {
+  fullscreenToggle.checked = !!document.fullscreenElement;
 }
 
 // ── 사이드바 ───────────────────────────────────────────
