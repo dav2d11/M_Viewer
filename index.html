@@ -243,6 +243,147 @@
     color: var(--text-3);
   }
 
+  .upload-menu-btn {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 5;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 14px;
+    padding: 10px 14px;
+    background: rgba(12, 15, 19, 0.72);
+    color: var(--text);
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+  }
+
+  #library-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    background: rgba(0, 0, 0, 0.74);
+    backdrop-filter: blur(4px);
+    padding: 20px;
+  }
+
+  #library-overlay.open {
+    display: block;
+  }
+
+  .library-panel {
+    width: min(980px, 100%);
+    height: min(88vh, 900px);
+    margin: 0 auto;
+    background: rgba(11, 14, 18, 0.96);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow);
+  }
+
+  .library-head {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .library-copy strong {
+    display: block;
+    font-size: 16px;
+  }
+
+  .library-copy span {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-3);
+    font-size: 11px;
+  }
+
+  .library-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px;
+  }
+
+  .library-empty {
+    padding: 28px;
+    color: var(--text-3);
+    text-align: center;
+  }
+
+  .library-item {
+    padding: 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .library-item + .library-item {
+    margin-top: 10px;
+  }
+
+  .library-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .library-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .library-meta {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .library-chip {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .library-chip.same {
+    color: #8ee39f;
+    border-color: rgba(142, 227, 159, 0.32);
+  }
+
+  .library-chip.local {
+    color: #ffcc7a;
+    border-color: rgba(255, 204, 122, 0.32);
+  }
+
+  .library-chip.remote {
+    color: #7fd2ff;
+    border-color: rgba(127, 210, 255, 0.32);
+  }
+
+  .library-chip.diff {
+    color: #ff8a8a;
+    border-color: rgba(255, 138, 138, 0.32);
+  }
+
+  .library-sub {
+    margin-top: 10px;
+    color: var(--text-3);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
   #viewer-app {
     display: none;
     height: 100vh;
@@ -1184,6 +1325,7 @@
 <body>
 
 <div id="upload-screen">
+  <button class="upload-menu-btn" type="button" onclick="openLibraryOverlay()">보관함</button>
   <div class="upload-shell">
     <div class="upload-title">MANGA<span>.</span>VIEWER</div>
     <div class="upload-sub">웹툰 스크롤 모드와 양면 리더 모드를 모두 지원합니다. 대용량 폴더도 지연 로딩으로 더 빠르게 열고, 만화별 진행도는 분리 저장됩니다.</div>
@@ -1205,6 +1347,19 @@
       </div>
     </div>
     <div class="loading-note" id="loading-note"></div>
+  </div>
+</div>
+
+<div id="library-overlay" onclick="closeLibraryOverlay(event)">
+  <div class="library-panel" onclick="event.stopPropagation()">
+    <div class="library-head">
+      <div class="library-copy">
+        <strong>만화별 진행도</strong>
+        <span id="library-device-copy"></span>
+      </div>
+      <button class="sidebar-close" type="button" onclick="closeLibraryOverlay()">×</button>
+    </div>
+    <div class="library-list" id="library-list"></div>
   </div>
 </div>
 
@@ -1388,6 +1543,7 @@ const IMG_SIZE_KEY = 'manga_img_scale_v1';
 const FIRST_SINGLE_KEY = 'manga_first_single_v1';
 const READER_MODE_KEY = 'manga_reader_mode_v1';
 const CLOUD_CONFIG_KEY = 'manga_cloud_config_v1';
+const DEVICE_ID_KEY = 'manga_device_id_v1';
 const DEFAULT_CLOUD_CONFIG = {
   apiKey: '',
   authDomain: '',
@@ -1425,6 +1581,9 @@ let webtoonAutoloaded = new Set();
 let webtoonLoadingNext = false;
 let saveProgressTimer = null;
 let cloudSyncTimer = null;
+let remoteProgressStore = {};
+const deviceId = getOrCreateDeviceId();
+const deviceLabel = getDeviceLabel();
 
 const cloud = {
   app: null,
@@ -1471,6 +1630,7 @@ syncModeButtons();
 hydrateCloudConfigInputs();
 initCloudFromSavedConfig();
 syncCloudAdvancedVisibility();
+renderLibraryDashboard();
 
 async function handleFileSelection(e) {
   const fileList = e.target.files;
@@ -2475,6 +2635,7 @@ function writeProgressStore(store) {
   try {
     localStorage.setItem(PROGRESS_STORE_KEY, JSON.stringify(store));
   } catch (e) {}
+  renderLibraryDashboard();
 }
 
 function getCurrentProgress() {
@@ -2486,19 +2647,32 @@ function saveCurrentProgress() {
   if (!currentMangaId || !curEp) return;
   clearTimeout(saveProgressTimer);
   saveProgressTimer = setTimeout(() => {
-    const store = readProgressStore();
-    store[currentMangaId] = {
-      mangaId: currentMangaId,
-      title: currentMangaTitle,
-      ep: curEp,
-      pair: curPair,
-      page: curPage,
-      mode: curMode,
-      updatedAt: Date.now()
-    };
-    writeProgressStore(store);
+    commitCurrentProgress();
     scheduleCloudSync();
   }, 60);
+}
+
+function commitCurrentProgress() {
+  if (!currentMangaId || !curEp) return null;
+  const store = readProgressStore();
+  store[currentMangaId] = {
+    mangaId: currentMangaId,
+    title: currentMangaTitle,
+    ep: curEp,
+    pair: curPair,
+    page: curPage,
+    mode: curMode,
+    updatedAt: Date.now(),
+    deviceId,
+    deviceLabel
+  };
+  writeProgressStore(store);
+  return store[currentMangaId];
+}
+
+function flushCurrentProgress() {
+  clearTimeout(saveProgressTimer);
+  return commitCurrentProgress();
 }
 
 function getResumeToast(progress) {
@@ -2631,6 +2805,114 @@ function yieldToBrowser() {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+function getOrCreateDeviceId() {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const created = `dev_${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(DEVICE_ID_KEY, created);
+    return created;
+  } catch (e) {
+    return `dev_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function getDeviceLabel() {
+  const platform = navigator.platform || 'unknown';
+  const mobile = /iphone|ipad|android|mobile/i.test(navigator.userAgent || '');
+  return `${platform}${mobile ? ' mobile' : ' desktop'}`;
+}
+
+function openLibraryOverlay() {
+  renderLibraryDashboard();
+  document.getElementById('library-overlay').classList.add('open');
+}
+
+function closeLibraryOverlay(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById('library-overlay').classList.remove('open');
+}
+
+function progressPositionSignature(progress) {
+  if (!progress) return '';
+  return [progress.mode || '', progress.ep || 0, progress.pair || 0, progress.page || 0].join('|');
+}
+
+function getProgressComparison(localProgress, remoteProgress) {
+  if (localProgress && remoteProgress) {
+    if (progressPositionSignature(localProgress) === progressPositionSignature(remoteProgress)) {
+      return { label: '같음', className: 'same' };
+    }
+    return (localProgress.updatedAt || 0) >= (remoteProgress.updatedAt || 0)
+      ? { label: '이 기기 진행도 앞섬', className: 'local' }
+      : { label: '다른 기기 진행도 앞섬', className: 'remote' };
+  }
+  if (localProgress) return { label: '이 기기만 있음', className: 'local' };
+  if (remoteProgress) return { label: '다른 기기만 있음', className: 'remote' };
+  return { label: '정보 없음', className: 'diff' };
+}
+
+function formatProgressLine(progress) {
+  if (!progress) return '진행도 없음';
+  return progress.mode === 'webtoon'
+    ? `${progress.ep}화 · ${progress.page}p`
+    : `${progress.ep}화 · ${progress.pair + 1}컷`;
+}
+
+function formatUpdatedAt(ts) {
+  if (!ts) return '-';
+  try {
+    return new Date(ts).toLocaleString('ko-KR');
+  } catch (e) {
+    return '-';
+  }
+}
+
+function renderLibraryDashboard() {
+  const list = document.getElementById('library-list');
+  const deviceCopy = document.getElementById('library-device-copy');
+  if (!list || !deviceCopy) return;
+
+  const localStore = readProgressStore();
+  const ids = Array.from(new Set([...Object.keys(localStore), ...Object.keys(remoteProgressStore)]));
+  deviceCopy.textContent = `현재 기기: ${deviceLabel} · 클라우드 ${cloud.user ? '연결됨' : '비연결'}`;
+
+  if (!ids.length) {
+    list.innerHTML = '<div class="library-empty">저장된 진행도가 아직 없습니다.</div>';
+    return;
+  }
+
+  ids.sort((a, b) => {
+    const aTime = Math.max(localStore[a]?.updatedAt || 0, remoteProgressStore[a]?.updatedAt || 0);
+    const bTime = Math.max(localStore[b]?.updatedAt || 0, remoteProgressStore[b]?.updatedAt || 0);
+    return bTime - aTime;
+  });
+
+  list.innerHTML = ids.map(id => {
+    const localProgress = localStore[id] || null;
+    const remoteProgress = remoteProgressStore[id] || null;
+    const progress = localProgress || remoteProgress;
+    const compare = getProgressComparison(localProgress, remoteProgress);
+    const title = progress?.title || id;
+    return `
+      <div class="library-item">
+        <div class="library-row">
+          <div class="library-title">${title}</div>
+          <div class="library-chip ${compare.className}">${compare.label}</div>
+        </div>
+        <div class="library-meta">
+          <div class="library-chip">이 기기: ${formatProgressLine(localProgress)}</div>
+          <div class="library-chip">클라우드: ${formatProgressLine(remoteProgress)}</div>
+        </div>
+        <div class="library-sub">
+          로컬 저장: ${formatUpdatedAt(localProgress?.updatedAt)}${localProgress?.deviceLabel ? ` · ${localProgress.deviceLabel}` : ''}<br>
+          클라우드 저장: ${formatUpdatedAt(remoteProgress?.updatedAt)}${remoteProgress?.deviceLabel ? ` · ${remoteProgress.deviceLabel}` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 document.addEventListener('keydown', e => {
   if (!curEp) return;
   if (curMode === 'spread') {
@@ -2654,7 +2936,7 @@ document.addEventListener('keydown', e => {
 });
 
 window.addEventListener('beforeunload', () => {
-  saveCurrentProgress();
+  flushCurrentProgress();
   if (cloud.user) syncCloudNow(true);
 });
 
@@ -2745,6 +3027,8 @@ function initCloud(config, force = false) {
         setCloudStatus(`${user.email || user.uid} 연결됨`);
         await pullCloudProgress();
       } else {
+        remoteProgressStore = {};
+        renderLibraryDashboard();
         setCloudStatus('로그인 필요');
       }
     });
@@ -2810,11 +3094,14 @@ function scheduleCloudSync() {
 async function syncCloudNow(silent = false) {
   if (!cloud.user || !cloud.db) return;
   try {
+    flushCurrentProgress();
     const store = readProgressStore();
     await cloud.db.collection('mangaProgress').doc(cloud.user.uid).set({
       updatedAt: Date.now(),
       books: store
     }, { merge: true });
+    remoteProgressStore = JSON.parse(JSON.stringify(store));
+    renderLibraryDashboard();
     if (!silent) setCloudStatus('클라우드 동기화 완료');
   } catch (e) {
     console.error(e);
@@ -2827,16 +3114,20 @@ async function pullCloudProgress() {
   try {
     const snapshot = await cloud.db.collection('mangaProgress').doc(cloud.user.uid).get();
     if (!snapshot.exists) {
+      remoteProgressStore = {};
+      renderLibraryDashboard();
       await syncCloudNow(true);
       setCloudStatus('새 클라우드 계정 연결됨');
       return;
     }
 
     const remote = snapshot.data()?.books || {};
+    remoteProgressStore = remote;
     const local = readProgressStore();
     const merged = mergeProgressStore(local, remote);
     writeProgressStore(merged);
     renderList();
+    renderLibraryDashboard();
 
     const current = getCurrentProgress();
     if (current && episodes[current.ep] && curEp !== current.ep) {
