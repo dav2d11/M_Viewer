@@ -21,7 +21,7 @@
     --accent-2: #ff9a55;
     --accent-soft: rgba(255, 107, 53, 0.14);
     --shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
-    --sidebar-w: 320px;
+    --sidebar-w: 1120px;
     --img-scale: 1;
   }
 
@@ -242,30 +242,94 @@
 
   #sidebar {
     position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: min(var(--sidebar-w), 92vw);
+    top: 18px;
+    left: 50%;
+    bottom: 18px;
+    width: min(var(--sidebar-w), 96vw);
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 18%),
       rgba(11, 14, 18, 0.96);
-    border-right: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: 28px;
     backdrop-filter: blur(16px);
     display: flex;
     flex-direction: column;
-    transform: translateX(-100%);
-    transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+    overflow: hidden;
+    transform: translateX(-50%) translateY(12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1), opacity 0.2s ease;
     z-index: 80;
-    box-shadow: 18px 0 48px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
   }
 
   #sidebar.open {
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .sb-head {
-    padding: 20px 18px 14px;
+    padding: 20px 18px 18px;
     border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+
+  .sidebar-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .sidebar-grid {
+    display: grid;
+    grid-template-columns: minmax(360px, 440px) minmax(0, 1fr);
+    gap: 18px;
+    min-height: 100%;
+  }
+
+  .sidebar-col {
+    min-height: 0;
+  }
+
+  .sidebar-col.settings {
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .sidebar-col.episodes {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+  }
+
+  .episodes-head {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex: 0 0 auto;
+  }
+
+  .episodes-head strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .episodes-head span {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-3);
   }
 
   .sb-head h2 {
@@ -452,10 +516,13 @@
 
   #ep-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    padding: 8px 0 18px;
+    padding: 10px 8px 18px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
 
   .ep-item {
@@ -793,7 +860,8 @@
     right: 0;
     z-index: 25;
     padding: 14px 16px;
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
     align-items: center;
     gap: 10px;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
@@ -827,15 +895,16 @@
   }
 
   #hud-title {
-    flex: 1;
     font-size: 13px;
     font-weight: 700;
+    min-width: 0;
   }
 
   #hud-page {
     font-family: monospace;
     font-size: 11px;
     color: rgba(255, 255, 255, 0.58);
+    justify-self: end;
   }
 
   #webtoon-fab {
@@ -962,6 +1031,30 @@
   }
 
   @media (max-width: 768px) {
+    #sidebar {
+      top: 8px;
+      bottom: 8px;
+      width: min(var(--sidebar-w), 98vw);
+      border-radius: 22px;
+    }
+
+    .sidebar-body {
+      padding: 12px;
+    }
+
+    .sidebar-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .sidebar-col.settings {
+      max-height: 44vh;
+    }
+
+    .sidebar-col.episodes {
+      min-height: 34vh;
+    }
+
     .upload-shell {
       padding: 24px;
       border-radius: 24px;
@@ -978,6 +1071,14 @@
 
     .arr-btn {
       width: 56px;
+    }
+
+    #hud {
+      grid-template-columns: 1fr auto auto auto;
+    }
+
+    #hud-page {
+      display: none;
     }
 
     .end-actions {
@@ -1021,82 +1122,95 @@
         <div class="manga-badge" id="manga-id-label">NO BOOK</div>
       </div>
 
-      <div class="section-box">
-        <div class="section-title">Reader</div>
-        <div class="inline-row">
-          <button class="pill-btn active" id="mode-spread-btn" onclick="setReaderMode('spread')">책처럼</button>
-          <button class="pill-btn" id="mode-webtoon-btn" onclick="setReaderMode('webtoon')">웹툰처럼</button>
-        </div>
-      </div>
-
-      <div class="section-box">
-        <div class="section-title">View Controls</div>
-        <div class="sb-controls">
-          <button class="ghost-btn" onclick="loadPrevEpisode()">이전화</button>
-          <button class="ghost-btn" onclick="loadNextEpisode()">다음화</button>
-          <button class="ghost-btn" onclick="resetApp()">폴더 재선택</button>
-        </div>
-        <div class="toggle-row" style="margin-top:12px">
-          <div class="toggle-copy">
-            <strong>정주행 모드</strong>
-            <span>회차 끝에서 다음 화로 자연스럽게 이어집니다</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="binge" checked>
-            <div class="toggle-track"><div class="toggle-thumb"></div></div>
-          </label>
-        </div>
-        <div class="toggle-row" style="margin-top:10px">
-          <div class="toggle-copy">
-            <strong>첫 페이지 단독</strong>
-            <span>책 모드에서 표지처럼 1페이지만 먼저 표시</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="first-single">
-            <div class="toggle-track"><div class="toggle-thumb"></div></div>
-          </label>
-        </div>
-        <div class="toggle-row" style="margin-top:10px">
-          <div class="toggle-copy">
-            <strong>전체 화면</strong>
-            <span>영상처럼 몰입해서 보기</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="fullscreen-toggle">
-            <div class="toggle-track"><div class="toggle-thumb"></div></div>
-          </label>
-        </div>
-        <div class="size-head" style="margin-top:14px">
-          <span>책 모드 이미지 크기</span>
-          <strong id="img-size-label">100%</strong>
-        </div>
-        <input type="range" id="img-size" min="70" max="130" step="5" value="100">
-      </div>
-
-      <div class="section-box cloud-box">
-        <div class="section-title">Cloud Sync</div>
-        <div class="toggle-copy">
-          <strong>기기간 진행도 공유</strong>
-          <span>Firebase 프로젝트를 연결하면 iPhone, iPad, Mac에서 같은 계정으로 진행도를 동기화합니다.</span>
-        </div>
-        <input id="cloud-api-key" placeholder="Firebase API Key">
-        <input id="cloud-auth-domain" placeholder="Auth Domain (예: xxx.firebaseapp.com)">
-        <input id="cloud-project-id" placeholder="Project ID">
-        <input id="cloud-app-id" placeholder="App ID">
-        <input id="cloud-email" placeholder="로그인 이메일">
-        <input id="cloud-password" type="password" placeholder="비밀번호">
-        <div class="cloud-actions">
-          <button class="small-btn" onclick="saveCloudConfig()">설정 저장</button>
-          <button class="small-btn" onclick="syncCloudNow()">지금 동기화</button>
-          <button class="small-btn" onclick="cloudLogin()">로그인</button>
-          <button class="small-btn" onclick="cloudRegister()">회원가입</button>
-        </div>
-        <div id="cloud-status">클라우드 비연결</div>
-        <div class="cloud-note">로그인 상태는 브라우저에 유지됩니다. Firebase Authentication의 Email/Password와 Firestore를 활성화해야 합니다.</div>
-      </div>
     </div>
 
-    <div id="ep-list"></div>
+    <div class="sidebar-body">
+      <div class="sidebar-grid">
+        <div class="sidebar-col settings">
+          <div class="section-box">
+            <div class="section-title">Reader</div>
+            <div class="inline-row">
+              <button class="pill-btn active" id="mode-spread-btn" onclick="setReaderMode('spread')">책처럼</button>
+              <button class="pill-btn" id="mode-webtoon-btn" onclick="setReaderMode('webtoon')">웹툰처럼</button>
+            </div>
+          </div>
+
+          <div class="section-box">
+            <div class="section-title">View Controls</div>
+            <div class="sb-controls">
+              <button class="ghost-btn" onclick="loadPrevEpisode()">이전화</button>
+              <button class="ghost-btn" onclick="loadNextEpisode()">다음화</button>
+              <button class="ghost-btn" onclick="resetApp()">폴더 재선택</button>
+            </div>
+            <div class="toggle-row" style="margin-top:12px">
+              <div class="toggle-copy">
+                <strong>정주행 모드</strong>
+                <span>회차 끝에서 다음 화로 자연스럽게 이어집니다</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="binge" checked>
+                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              </label>
+            </div>
+            <div class="toggle-row" style="margin-top:10px">
+              <div class="toggle-copy">
+                <strong>첫 페이지 단독</strong>
+                <span>책 모드에서 표지처럼 1페이지만 먼저 표시</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="first-single">
+                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              </label>
+            </div>
+            <div class="toggle-row" style="margin-top:10px">
+              <div class="toggle-copy">
+                <strong>전체 화면</strong>
+                <span>영상처럼 몰입해서 보기</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="fullscreen-toggle">
+                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              </label>
+            </div>
+            <div class="size-head" style="margin-top:14px">
+              <span>책 모드 이미지 크기</span>
+              <strong id="img-size-label">100%</strong>
+            </div>
+            <input type="range" id="img-size" min="70" max="130" step="5" value="100">
+          </div>
+
+          <div class="section-box cloud-box">
+            <div class="section-title">Cloud Sync</div>
+            <div class="toggle-copy">
+              <strong>기기간 진행도 공유</strong>
+              <span>Firebase 프로젝트를 연결하면 iPhone, iPad, Mac에서 같은 계정으로 진행도를 동기화합니다.</span>
+            </div>
+            <input id="cloud-api-key" placeholder="Firebase API Key">
+            <input id="cloud-auth-domain" placeholder="Auth Domain (예: xxx.firebaseapp.com)">
+            <input id="cloud-project-id" placeholder="Project ID">
+            <input id="cloud-app-id" placeholder="App ID">
+            <input id="cloud-email" placeholder="로그인 이메일">
+            <input id="cloud-password" type="password" placeholder="비밀번호">
+            <div class="cloud-actions">
+              <button class="small-btn" onclick="saveCloudConfig()">설정 저장</button>
+              <button class="small-btn" onclick="syncCloudNow()">지금 동기화</button>
+              <button class="small-btn" onclick="cloudLogin()">로그인</button>
+              <button class="small-btn" onclick="cloudRegister()">회원가입</button>
+            </div>
+            <div id="cloud-status">클라우드 비연결</div>
+            <div class="cloud-note">로그인 상태는 브라우저에 유지됩니다. Firebase Authentication의 Email/Password와 Firestore를 활성화해야 합니다.</div>
+          </div>
+        </div>
+
+        <div class="sidebar-col episodes">
+          <div class="episodes-head">
+            <strong>회차 목록</strong>
+            <span>터치 영역을 넓히고 스크롤을 분리했습니다</span>
+          </div>
+          <div id="ep-list"></div>
+        </div>
+      </div>
+    </div>
   </aside>
 
   <div id="reader">
@@ -1123,11 +1237,11 @@
     </div>
 
     <div id="hud">
-      <button class="hud-btn" onclick="toggleSidebar()">☰</button>
       <span id="hud-title"></span>
       <span id="hud-page"></span>
       <button class="hud-btn" id="hud-mode" onclick="toggleReaderMode()" title="리더 모드 전환">↕</button>
       <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
+      <button class="hud-btn" onclick="toggleSidebar()" title="메뉴">☰</button>
     </div>
 
     <div id="webtoon-fab">
