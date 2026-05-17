@@ -4,531 +4,1731 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>만화 뷰어</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #111113; --surface: #1c1c1f; --surface2: #27272b;
-    --border: #333338; --accent: #ff6b35; --text: #f0ede8;
-    --text2: #888680; --text3: #444240; --sidebar-w: 240px;
+    --bg: #0b0d10;
+    --surface: rgba(17, 20, 25, 0.92);
+    --surface-2: rgba(26, 31, 38, 0.95);
+    --surface-3: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.10);
+    --text: #f5f0e8;
+    --text-2: rgba(245, 240, 232, 0.7);
+    --text-3: rgba(245, 240, 232, 0.45);
+    --accent: #ff6b35;
+    --accent-2: #ff9a55;
+    --accent-soft: rgba(255, 107, 53, 0.14);
+    --shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+    --sidebar-w: 320px;
     --img-scale: 1;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; background: #000; color: var(--text); font-family: 'Noto Sans KR', sans-serif; overflow: hidden; user-select: none; }
 
-  /* 업로드 화면 */
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top, rgba(255, 107, 53, 0.16), transparent 30%),
+      radial-gradient(circle at 80% 20%, rgba(73, 187, 255, 0.10), transparent 24%),
+      #000;
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    user-select: none;
+  }
+
+  button, input {
+    font: inherit;
+  }
+
   #upload-screen {
-    height: 100vh; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    background: var(--bg); position: relative; overflow: hidden;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(135deg, rgba(255, 107, 53, 0.14), transparent 25%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+      #090b0d;
   }
+
+  #upload-screen::before,
+  #upload-screen::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(30px);
+    pointer-events: none;
+    animation: floatGlow 9s ease-in-out infinite;
+  }
+
   #upload-screen::before {
-    content: ''; position: absolute; width: 600px; height: 600px;
-    background: radial-gradient(circle, rgba(255,107,53,0.07) 0%, transparent 70%);
-    top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none;
+    width: 420px;
+    height: 420px;
+    top: -80px;
+    left: -100px;
+    background: rgba(255, 107, 53, 0.18);
   }
+
+  #upload-screen::after {
+    width: 360px;
+    height: 360px;
+    right: -100px;
+    bottom: -80px;
+    background: rgba(73, 187, 255, 0.12);
+    animation-delay: -3s;
+  }
+
+  @keyframes floatGlow {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(0, -16px, 0) scale(1.04); }
+  }
+
+  .upload-shell {
+    width: min(560px, 92vw);
+    background: rgba(12, 15, 19, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    padding: 32px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(16px);
+    animation: riseIn 0.45s ease;
+  }
+
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(18px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
   .upload-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: clamp(44px,10vw,76px);
-    letter-spacing: 0.08em; line-height: 1; margin-bottom: 8px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 10vw, 82px);
+    line-height: 0.95;
+    letter-spacing: 0.08em;
   }
-  .upload-title span { color: var(--accent); }
-  .upload-sub { font-size: 13px; color: var(--text2); margin-bottom: 44px; }
+
+  .upload-title span {
+    color: var(--accent);
+  }
+
+  .upload-sub {
+    margin-top: 10px;
+    color: var(--text-2);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .upload-points {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .upload-chip {
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-2);
+    font-size: 12px;
+  }
+
   #drop-zone {
-    width: min(400px,88vw); border: 2px dashed var(--border); border-radius: 16px;
-    padding: 44px 28px; display: flex; flex-direction: column; align-items: center;
-    gap: 14px; cursor: pointer; transition: all 0.2s; background: var(--surface); position: relative;
+    margin-top: 26px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 24px;
+    padding: 38px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+      rgba(20, 24, 30, 0.65);
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
   }
-  #drop-zone:hover { border-color: var(--accent); background: rgba(255,107,53,0.04); }
-  #drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-  .drop-icon { font-size: 38px; }
-  .drop-text { font-size: 15px; font-weight: 700; }
-  .drop-sub { font-size: 12px; color: var(--text2); text-align: center; line-height: 1.7; }
+
+  #drop-zone:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 107, 53, 0.55);
+    background:
+      linear-gradient(180deg, rgba(255, 107, 53, 0.10), rgba(255, 255, 255, 0.02)),
+      rgba(20, 24, 30, 0.75);
+  }
+
+  #drop-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .drop-icon {
+    width: 68px;
+    height: 68px;
+    display: grid;
+    place-items: center;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255, 107, 53, 0.28), rgba(255, 107, 53, 0.10));
+    font-size: 30px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .drop-text {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .drop-sub {
+    color: var(--text-2);
+    text-align: center;
+    line-height: 1.8;
+    font-size: 13px;
+  }
+
   .drop-btn {
-    margin-top: 6px; background: var(--accent); color: #fff; border: none;
-    padding: 11px 30px; border-radius: 8px; font-size: 14px; font-weight: 700;
-    font-family: 'Noto Sans KR', sans-serif; pointer-events: none;
+    margin-top: 8px;
+    border: none;
+    border-radius: 999px;
+    padding: 11px 22px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-weight: 700;
+    pointer-events: none;
+    box-shadow: 0 12px 28px rgba(255, 107, 53, 0.25);
   }
 
-  /* 뷰어 앱 */
-  #viewer-app { display: none; height: 100vh; position: relative; }
+  .loading-note {
+    margin-top: 14px;
+    min-height: 20px;
+    font-size: 12px;
+    color: var(--text-3);
+  }
 
-  /* 사이드바 오버레이 */
+  #viewer-app {
+    display: none;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
   #sb-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6); z-index: 40;
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.68);
+    backdrop-filter: blur(3px);
+    z-index: 70;
   }
-  #sb-overlay.open { display: block; }
 
-  /* 사이드바 */
+  #sb-overlay.open {
+    display: block;
+  }
+
   #sidebar {
-    position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
-    background: var(--surface); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; z-index: 50;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(var(--sidebar-w), 92vw);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 18%),
+      rgba(11, 14, 18, 0.96);
+    border-right: 1px solid var(--border);
+    backdrop-filter: blur(16px);
+    display: flex;
+    flex-direction: column;
     transform: translateX(-100%);
-    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+    transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+    z-index: 80;
+    box-shadow: 18px 0 48px rgba(0, 0, 0, 0.45);
   }
-  #sidebar.open { transform: translateX(0); box-shadow: 8px 0 30px rgba(0,0,0,0.6); }
 
-  .sb-head { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .sb-head h2 { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.06em; color: var(--accent); }
-  .sb-head p { font-size: 11px; color: var(--text3); margin-top: 2px; }
-  .sb-controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-  #btn-reset {
-    font-size: 10px; color: var(--text3); background: none;
-    border: 1px solid var(--border); padding: 4px 10px; border-radius: 4px;
-    cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s;
+  #sidebar.open {
+    transform: translateX(0);
   }
-  #btn-reset:hover { color: var(--text2); border-color: var(--text2); }
 
-  /* 정주행 토글 */
-  .binge-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; cursor: pointer; }
-  .binge-wrap span { font-size: 11px; color: var(--text2); }
-  .binge-wrap input { display: none; }
-  .t-track {
-    width: 32px; height: 18px; background: var(--border);
-    border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0;
+  .sb-head {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--border);
   }
-  .binge-wrap input:checked ~ .t-track { background: var(--accent); }
-  .t-thumb {
-    position: absolute; top: 2px; left: 2px;
-    width: 14px; height: 14px; background: #fff; border-radius: 50%; transition: left 0.2s;
+
+  .sb-head h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
   }
-  .binge-wrap input:checked ~ .t-track .t-thumb { left: 16px; }
-  .size-control {
-    margin-top: 12px; display: flex; flex-direction: column; gap: 7px;
+
+  .sb-head p {
+    margin-top: 4px;
+    color: var(--text-3);
+    font-size: 11px;
   }
-  .toggle-group {
-    margin-top: 12px; display: flex; flex-direction: column; gap: 8px;
+
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
   }
+
+  .manga-badge {
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .section-box {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  .inline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sb-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .ghost-btn,
+  .pill-btn,
+  .small-btn {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .ghost-btn:hover,
+  .pill-btn:hover,
+  .small-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 107, 53, 0.45);
+    background: rgba(255, 107, 53, 0.10);
+  }
+
+  .ghost-btn {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .pill-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 14px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .pill-btn.active {
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.26), rgba(255, 154, 85, 0.10));
+    border-color: rgba(255, 107, 53, 0.6);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .small-btn {
+    padding: 9px 12px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .size-head,
   .toggle-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
+
+  .toggle-row + .toggle-row {
+    margin-top: 10px;
+  }
+
   .toggle-copy {
-    display: flex; flex-direction: column; gap: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
-  .toggle-copy strong { font-size: 11px; color: var(--text); }
-  .toggle-copy span { font-size: 10px; color: var(--text3); }
-  .size-head {
-    display: flex; align-items: center; justify-content: space-between;
-    font-size: 11px; color: var(--text2);
+
+  .toggle-copy strong {
+    font-size: 12px;
   }
-  .size-head strong { color: var(--text); font-weight: 700; }
+
+  .toggle-copy span,
+  .size-head span {
+    color: var(--text-3);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .size-head strong {
+    font-size: 12px;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .toggle-switch input {
+    display: none;
+  }
+
+  .toggle-track {
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    transition: background 0.2s ease;
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s ease;
+  }
+
+  .toggle-switch input:checked + .toggle-track {
+    background: var(--accent);
+  }
+
+  .toggle-switch input:checked + .toggle-track .toggle-thumb {
+    transform: translateX(18px);
+  }
+
   #img-size {
-    width: 100%; accent-color: var(--accent); cursor: pointer;
+    width: 100%;
+    margin-top: 10px;
+    accent-color: var(--accent);
+    cursor: pointer;
   }
 
-  #ep-list { flex: 1; overflow-y: auto; padding: 6px 0; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  #ep-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0 18px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+
   .ep-item {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 11px 16px; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s;
+    margin: 0 10px 8px;
+    padding: 14px 14px 14px 16px;
+    border-radius: 18px;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   }
-  .ep-item:hover { background: var(--surface2); }
-  .ep-item.active { border-left-color: var(--accent); background: var(--surface2); }
-  .ep-item.active .ep-label { color: var(--accent); }
-  .ep-label { font-size: 13px; font-weight: 700; }
-  .ep-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-  .ep-pages { font-size: 10px; color: var(--text3); }
-  .ep-prog { font-size: 9px; color: var(--accent); }
 
-  /* 리더 */
-  #reader { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; position: relative; }
+  .ep-item:hover {
+    transform: translateX(2px);
+    background: rgba(255, 255, 255, 0.05);
+  }
 
-  /* 스프레드 */
-  #spread { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  #pg-right { height: 100%; width: 50%; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; }
-  #pg-left  { height: 100%; width: 50%; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }
+  .ep-item.active {
+    border-color: rgba(255, 107, 53, 0.55);
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.18), rgba(255, 255, 255, 0.04));
+  }
+
+  .ep-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ep-label {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .ep-sub {
+    color: var(--text-3);
+    font-size: 10px;
+  }
+
+  .ep-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+  }
+
+  .ep-pages {
+    color: var(--text-3);
+    font-size: 10px;
+  }
+
+  .ep-prog {
+    color: var(--accent-2);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .cloud-box input {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    outline: none;
+  }
+
+  .cloud-box input:focus {
+    border-color: rgba(255, 107, 53, 0.45);
+  }
+
+  .cloud-actions {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .cloud-note {
+    margin-top: 10px;
+    font-size: 10px;
+    color: var(--text-3);
+    line-height: 1.6;
+  }
+
+  #cloud-status {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-2);
+    min-height: 16px;
+  }
+
+  #reader {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+  }
+
+  #spread-reader,
+  #webtoon-reader {
+    width: 100%;
+    height: 100%;
+  }
+
+  #spread-reader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #spread {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #pg-right,
+  #pg-left {
+    width: 50%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  #pg-right {
+    justify-content: flex-end;
+  }
+
+  #pg-left {
+    justify-content: flex-start;
+  }
+
+  #pg-right img,
+  #pg-left img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.24s ease;
+  }
+
+  #pg-right img.ready,
+  #pg-left img.ready {
+    opacity: 1;
+  }
+
   #pg-right img {
-    max-width: 100%; max-height: 100%;
-    object-fit: contain; display: block;
     transform-origin: right bottom;
     transform: scale(var(--img-scale));
   }
+
   #pg-left img {
-    max-width: 100%; max-height: 100%;
-    object-fit: contain; display: block;
     transform-origin: left bottom;
     transform: scale(var(--img-scale));
   }
-  #spread.single #pg-right { width: 100%; justify-content: center; overflow: hidden; }
-  #spread.single #pg-right img { transform-origin: center bottom; }
-  #spread.single #pg-left  { display: none; }
 
-  /* 탭 존 */
-  .zone { position: absolute; top: 0; bottom: 0; z-index: 10; cursor: pointer; }
-  #z-left   { left: 0;   width: 30%; }
+  #spread.single #pg-right {
+    width: 100%;
+    justify-content: center;
+  }
+
+  #spread.single #pg-right img {
+    transform-origin: center bottom;
+  }
+
+  #spread.single #pg-left {
+    display: none;
+  }
+
+  #webtoon-reader {
+    display: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+      #050505;
+  }
+
+  .webtoon-stack {
+    width: min(100%, 980px);
+    margin: 0 auto;
+    padding: 90px 0 120px;
+  }
+
+  .episode-block {
+    margin: 0 auto 24px;
+    padding: 18px;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+    animation: riseIn 0.32s ease;
+  }
+
+  .episode-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 0 6px;
+  }
+
+  .episode-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 0.08em;
+  }
+
+  .episode-meta {
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .webtoon-images {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .webtoon-frame {
+    position: relative;
+    min-height: 220px;
+    border-radius: 18px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+      #111;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .webtoon-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+    transform: translateX(-100%);
+    animation: skeleton 1.6s infinite;
+  }
+
+  @keyframes skeleton {
+    100% { transform: translateX(100%); }
+  }
+
+  .webtoon-frame.loaded::before {
+    display: none;
+  }
+
+  .webtoon-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+  }
+
+  .webtoon-frame.loaded img {
+    opacity: 1;
+  }
+
+  .sentinel {
+    height: 10px;
+  }
+
+  .zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+    cursor: pointer;
+  }
+
+  #z-left { left: 0; width: 30%; }
   #z-center { left: 30%; width: 40%; }
-  #z-right  { right: 0;  width: 30%; }
+  #z-right { right: 0; width: 30%; }
 
-  /* 화살표 오버레이 */
   #nav-ov {
-    position: absolute; inset: 0; z-index: 15;
-    display: none; align-items: center; justify-content: space-between;
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
     pointer-events: none;
   }
-  #nav-ov.visible { display: flex; }
+
+  #nav-ov.visible {
+    display: flex;
+  }
+
   .arr-btn {
-    width: 64px; height: 100%; display: flex; align-items: center; justify-content: center;
-    pointer-events: all; cursor: pointer;
-    background: linear-gradient(to right, rgba(0,0,0,0.4), transparent);
-    transition: background 0.15s;
+    width: 76px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: all;
+    cursor: pointer;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.52), transparent);
   }
-  .arr-btn.right { background: linear-gradient(to left, rgba(0,0,0,0.4), transparent); }
-  .arr-btn:hover { background: linear-gradient(to right, rgba(255,107,53,0.3), transparent); }
-  .arr-btn.right:hover { background: linear-gradient(to left, rgba(255,107,53,0.3), transparent); }
+
+  .arr-btn.right {
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.52), transparent);
+  }
+
   .arr-icon {
-    width: 44px; height: 44px; border-radius: 50%;
-    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px; color: #fff; backdrop-filter: blur(4px);
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.10);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(8px);
+    font-size: 26px;
   }
 
-  /* HUD */
   #hud {
-    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
-    padding: 14px 18px;
-    display: flex; align-items: center; gap: 12px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
-    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 25;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+    pointer-events: none;
   }
-  #hud.visible { opacity: 1; pointer-events: all; }
-  #hud-menu {
-    width: 36px; height: 36px; background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-    color: #fff; font-size: 15px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px); margin-left: 8px;
-  }
-  #hud-first-single {
-    width: 30px; height: 30px; background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
-    color: rgba(255,255,255,0.65); font-size: 11px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px); flex-shrink: 0;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-    title: '첫 페이지 단독';
-  }
-  #hud-first-single.active {
-    background: rgba(255,107,53,0.35); border-color: var(--accent); color: var(--accent);
-  }
-  #hud-title { flex: 1; font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.9); }
-  #hud-page  { font-size: 11px; color: rgba(255,255,255,0.5); font-family: monospace; }
 
-  /* 끝 화면 */
+  #hud.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .hud-btn {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+
+  .hud-btn.active {
+    color: var(--accent);
+    border-color: rgba(255, 107, 53, 0.58);
+    background: rgba(255, 107, 53, 0.20);
+  }
+
+  #hud-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  #hud-page {
+    font-family: monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.58);
+  }
+
+  #webtoon-fab {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    z-index: 26;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(12, 14, 18, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: var(--text);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.30);
+  }
+
+  #webtoon-fab.visible {
+    display: flex;
+  }
+
+  .fab-pill {
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+  }
+
   #end-screen {
-    display: none; position: absolute; inset: 0; z-index: 30;
-    background: rgba(0,0,0,0.88); backdrop-filter: blur(10px);
-    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.86);
+    backdrop-filter: blur(12px);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
   }
-  #end-screen.visible { display: flex; }
-  .end-icon { font-size: 54px; }
-  .end-title { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 0.1em; }
-  .end-sub { font-size: 13px; color: var(--text2); }
-  .end-btn {
-    margin-top: 8px; background: var(--accent); color: #fff; border: none;
-    padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: 700;
-    font-family: 'Noto Sans KR', sans-serif; cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .end-btn:hover { opacity: 0.85; }
 
-  /* 토스트 */
-  #toast {
-    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-    background: rgba(30,30,32,0.95); color: var(--text);
-    border: 1px solid var(--border);
-    padding: 10px 22px; border-radius: 20px; font-size: 13px; font-weight: 700;
-    z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none;
-    white-space: nowrap; backdrop-filter: blur(8px);
+  #end-screen.visible {
+    display: flex;
   }
-  #toast.show { opacity: 1; }
+
+  .end-card {
+    width: min(420px, 90vw);
+    padding: 28px;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    text-align: center;
+    box-shadow: var(--shadow);
+    animation: riseIn 0.3s ease;
+  }
+
+  .end-icon {
+    font-size: 48px;
+  }
+
+  .end-title {
+    margin-top: 8px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 34px;
+    letter-spacing: 0.10em;
+  }
+
+  .end-sub {
+    margin-top: 8px;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .end-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .end-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 12px 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .end-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%) translateY(16px);
+    padding: 12px 18px;
+    border-radius: 999px;
+    background: rgba(15, 18, 22, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.30);
+    backdrop-filter: blur(10px);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 120;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+  }
+
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  @media (max-width: 768px) {
+    .upload-shell {
+      padding: 24px;
+      border-radius: 24px;
+    }
+
+    .episode-block {
+      border-radius: 20px;
+      padding: 14px;
+    }
+
+    .webtoon-stack {
+      padding-top: 78px;
+    }
+
+    .arr-btn {
+      width: 56px;
+    }
+
+    .end-actions {
+      flex-direction: column;
+    }
+  }
 </style>
 </head>
 <body>
 
-<!-- 시작 화면 -->
 <div id="upload-screen">
-  <div class="upload-title">MANGA<span>.</span>VIEWER</div>
-  <div class="upload-sub">이미지 폴더를 선택하면 바로 시작됩니다</div>
-  <div id="drop-zone">
-    <input type="file" id="file-input" multiple accept="image/*" webkitdirectory>
-    <div class="drop-icon">📂</div>
-    <div class="drop-text">이미지 폴더 선택</div>
-    <div class="drop-sub">p001_001.jpg 형식으로 저장된<br>이미지 폴더를 선택해주세요</div>
-    <button class="drop-btn">폴더 열기</button>
+  <div class="upload-shell">
+    <div class="upload-title">MANGA<span>.</span>VIEWER</div>
+    <div class="upload-sub">웹툰 스크롤 모드와 양면 리더 모드를 모두 지원합니다. 대용량 폴더도 지연 로딩으로 더 빠르게 열고, 만화별 진행도는 분리 저장됩니다.</div>
+    <div class="upload-points">
+      <div class="upload-chip">웹툰 정주행</div>
+      <div class="upload-chip">만화별 진행도 분리</div>
+      <div class="upload-chip">클라우드 동기화 가능</div>
+    </div>
+    <div id="drop-zone">
+      <input type="file" id="file-input" multiple accept="image/*" webkitdirectory>
+      <div class="drop-icon">📚</div>
+      <div class="drop-text">이미지 폴더 선택</div>
+      <div class="drop-sub">`p001_001.jpg` 형식 파일을 읽습니다.<br>폴더를 선택하면 만화 단위로 회차를 자동 정리합니다.</div>
+      <button class="drop-btn">폴더 열기</button>
+    </div>
+    <div class="loading-note" id="loading-note"></div>
   </div>
 </div>
 
-<!-- 뷰어 -->
 <div id="viewer-app">
   <div id="sb-overlay" onclick="closeSidebar()"></div>
 
   <aside id="sidebar">
     <div class="sb-head">
-      <h2>MANGA VIEWER</h2>
-      <p id="total-label"></p>
-      <div class="sb-controls">
-        <button id="btn-reset" onclick="resetApp()">← 폴더 재선택</button>
-        <label class="binge-wrap" title="정주행: 회차 끝에서 다음 회차 자동 진행">
-          <input type="checkbox" id="binge" checked>
-          <span>정주행</span>
-          <div class="t-track"><div class="t-thumb"></div></div>
-        </label>
+      <div class="title-row">
+        <div>
+          <h2>MANGA VIEWER</h2>
+          <p id="total-label"></p>
+        </div>
+        <div class="manga-badge" id="manga-id-label">NO BOOK</div>
       </div>
-      <div class="size-control">
-        <div class="size-head">
-          <span>이미지 크기</span>
+
+      <div class="section-box">
+        <div class="section-title">Reader</div>
+        <div class="inline-row">
+          <button class="pill-btn active" id="mode-spread-btn" onclick="setReaderMode('spread')">책처럼</button>
+          <button class="pill-btn" id="mode-webtoon-btn" onclick="setReaderMode('webtoon')">웹툰처럼</button>
+        </div>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">View Controls</div>
+        <div class="sb-controls">
+          <button class="ghost-btn" onclick="loadPrevEpisode()">이전화</button>
+          <button class="ghost-btn" onclick="loadNextEpisode()">다음화</button>
+          <button class="ghost-btn" onclick="resetApp()">폴더 재선택</button>
+        </div>
+        <div class="toggle-row" style="margin-top:12px">
+          <div class="toggle-copy">
+            <strong>정주행 모드</strong>
+            <span>회차 끝에서 다음 화로 자연스럽게 이어집니다</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="binge" checked>
+            <div class="toggle-track"><div class="toggle-thumb"></div></div>
+          </label>
+        </div>
+        <div class="toggle-row" style="margin-top:10px">
+          <div class="toggle-copy">
+            <strong>첫 페이지 단독</strong>
+            <span>책 모드에서 표지처럼 1페이지만 먼저 표시</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="first-single">
+            <div class="toggle-track"><div class="toggle-thumb"></div></div>
+          </label>
+        </div>
+        <div class="toggle-row" style="margin-top:10px">
+          <div class="toggle-copy">
+            <strong>전체 화면</strong>
+            <span>영상처럼 몰입해서 보기</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="fullscreen-toggle">
+            <div class="toggle-track"><div class="toggle-thumb"></div></div>
+          </label>
+        </div>
+        <div class="size-head" style="margin-top:14px">
+          <span>책 모드 이미지 크기</span>
           <strong id="img-size-label">100%</strong>
         </div>
         <input type="range" id="img-size" min="70" max="130" step="5" value="100">
       </div>
-      <div class="toggle-group">
-        <div class="toggle-row" title="첫 페이지를 단독으로 표시합니다">
-          <div class="toggle-copy">
-            <strong>첫 페이지 단독</strong>
-            <span>표지처럼 1페이지만 먼저 표시</span>
-          </div>
-          <label class="binge-wrap">
-            <input type="checkbox" id="first-single">
-            <div class="t-track"><div class="t-thumb"></div></div>
-          </label>
+
+      <div class="section-box cloud-box">
+        <div class="section-title">Cloud Sync</div>
+        <div class="toggle-copy">
+          <strong>기기간 진행도 공유</strong>
+          <span>Firebase 프로젝트를 연결하면 iPhone, iPad, Mac에서 같은 계정으로 진행도를 동기화합니다.</span>
         </div>
-        <div class="toggle-row" title="브라우저 전체 화면으로 전환합니다">
-          <div class="toggle-copy">
-            <strong>전체 화면</strong>
-            <span>동영상처럼 화면 전체로 보기</span>
-          </div>
-          <label class="binge-wrap">
-            <input type="checkbox" id="fullscreen-toggle">
-            <div class="t-track"><div class="t-thumb"></div></div>
-          </label>
+        <input id="cloud-api-key" placeholder="Firebase API Key">
+        <input id="cloud-auth-domain" placeholder="Auth Domain (예: xxx.firebaseapp.com)">
+        <input id="cloud-project-id" placeholder="Project ID">
+        <input id="cloud-app-id" placeholder="App ID">
+        <input id="cloud-email" placeholder="로그인 이메일">
+        <input id="cloud-password" type="password" placeholder="비밀번호">
+        <div class="cloud-actions">
+          <button class="small-btn" onclick="saveCloudConfig()">설정 저장</button>
+          <button class="small-btn" onclick="syncCloudNow()">지금 동기화</button>
+          <button class="small-btn" onclick="cloudLogin()">로그인</button>
+          <button class="small-btn" onclick="cloudRegister()">회원가입</button>
         </div>
+        <div id="cloud-status">클라우드 비연결</div>
+        <div class="cloud-note">로그인 상태는 브라우저에 유지됩니다. Firebase Authentication의 Email/Password와 Firestore를 활성화해야 합니다.</div>
       </div>
     </div>
+
     <div id="ep-list"></div>
   </aside>
 
   <div id="reader">
-    <div id="spread">
-      <div id="pg-right"><img id="img-r" src="" alt=""></div>
-      <div id="pg-left"><img id="img-l" src="" alt=""></div>
+    <div id="spread-reader">
+      <div id="spread">
+        <div id="pg-right"><img id="img-r" alt=""></div>
+        <div id="pg-left"><img id="img-l" alt=""></div>
+      </div>
     </div>
 
-    <!-- 탭 존 -->
-    <div class="zone" id="z-left"   onclick="tapLeft()"></div>
-    <div class="zone" id="z-center" onclick="tapCenter()"></div>
-    <div class="zone" id="z-right"  onclick="tapRight()"></div>
+    <div id="webtoon-reader">
+      <div class="webtoon-stack" id="webtoon-stack"></div>
+      <div class="sentinel" id="webtoon-sentinel"></div>
+    </div>
 
-    <!-- 화살표 -->
+    <div class="zone" id="z-left" onclick="tapLeft()"></div>
+    <div class="zone" id="z-center" onclick="tapCenter()"></div>
+    <div class="zone" id="z-right" onclick="tapRight()"></div>
+
     <div id="nav-ov">
-      <div class="arr-btn"       onclick="tapLeft()"> <div class="arr-icon">‹</div></div>
+      <div class="arr-btn" onclick="tapLeft()"><div class="arr-icon">‹</div></div>
       <div style="flex:1"></div>
       <div class="arr-btn right" onclick="tapRight()"><div class="arr-icon">›</div></div>
     </div>
 
-    <!-- HUD -->
     <div id="hud">
+      <button class="hud-btn" onclick="toggleSidebar()">☰</button>
       <span id="hud-title"></span>
       <span id="hud-page"></span>
-      <button id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
-      <button id="hud-menu" onclick="toggleSidebar()">☰</button>
+      <button class="hud-btn" id="hud-mode" onclick="toggleReaderMode()" title="리더 모드 전환">↕</button>
+      <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
     </div>
 
-    <!-- 끝 화면 -->
+    <div id="webtoon-fab">
+      <button class="fab-pill" onclick="loadPrevEpisode()">이전화</button>
+      <button class="fab-pill" onclick="openSidebar()">목록</button>
+      <button class="fab-pill" onclick="loadNextEpisode()">다음화</button>
+    </div>
+
     <div id="end-screen">
-      <div class="end-icon">📚</div>
-      <div class="end-title" id="end-title">완독!</div>
-      <div class="end-sub"   id="end-sub"></div>
-      <button class="end-btn" onclick="closeEnd()">목록 보기</button>
+      <div class="end-card">
+        <div class="end-icon">📚</div>
+        <div class="end-title" id="end-title">완독!</div>
+        <div class="end-sub" id="end-sub"></div>
+        <div class="end-actions">
+          <button class="end-btn" onclick="closeEnd()">목록 보기</button>
+          <button class="end-btn secondary" onclick="loadNextEpisode()">다음 화</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <div id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-const STORE_KEY = 'manga_progress_v1';
+const PROGRESS_STORE_KEY = 'manga_progress_v2';
 const IMG_SIZE_KEY = 'manga_img_scale_v1';
 const FIRST_SINGLE_KEY = 'manga_first_single_v1';
+const READER_MODE_KEY = 'manga_reader_mode_v1';
+const CLOUD_CONFIG_KEY = 'manga_cloud_config_v1';
 
 let episodes = {};
-let epKeys   = [];
-let curEp    = null;
-let curPair  = 0;
-let navOn    = false;
+let epKeys = [];
+let curEp = null;
+let curPair = 0;
+let curPage = 1;
+let curMode = 'spread';
+let currentMangaId = null;
+let currentMangaTitle = '';
+let navOn = false;
 let navTimer = null;
-let urls     = [];   // revoke 대상 Object URL
+let toastTimer = null;
+
+let objectUrlCache = new WeakMap();
+let activeObjectUrls = new Set();
+let webtoonObserver = null;
+let webtoonSentinelObserver = null;
+let webtoonVisible = [];
+let webtoonRenderedEpisodes = [];
+let webtoonAutoloaded = new Set();
+let webtoonLoadingNext = false;
+let saveProgressTimer = null;
+let cloudSyncTimer = null;
+
+const cloud = {
+  app: null,
+  auth: null,
+  db: null,
+  user: null,
+  initialized: false
+};
 
 const imgSizeInput = document.getElementById('img-size');
 const imgSizeLabel = document.getElementById('img-size-label');
 const firstSingleInput = document.getElementById('first-single');
 const fullscreenToggle = document.getElementById('fullscreen-toggle');
+const loadingNote = document.getElementById('loading-note');
+const webtoonReader = document.getElementById('webtoon-reader');
+const webtoonStack = document.getElementById('webtoon-stack');
+const webtoonSentinel = document.getElementById('webtoon-sentinel');
+const spreadReader = document.getElementById('spread-reader');
 
 imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
 firstSingleInput.addEventListener('change', () => {
   saveFirstSingle(firstSingleInput.checked);
   syncFirstSingleHUD();
-  if (curEp) {
+  if (curMode === 'spread' && curEp) {
     const spreads = getSpreads(episodes[curEp]);
     if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
     drawSpread();
   }
 });
 fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
+webtoonReader.addEventListener('scroll', handleWebtoonScroll, { passive: true });
 document.addEventListener('fullscreenchange', syncFullscreenToggle);
+document.getElementById('file-input').addEventListener('change', handleFileSelection);
 
 initImageScale();
 initFirstSingle();
+initReaderMode();
 syncFullscreenToggle();
 syncFirstSingleHUD();
+syncModeButtons();
+hydrateCloudConfigInputs();
+initCloudFromSavedConfig();
 
-// ── 파일 선택 ──────────────────────────────────────────
-document.getElementById('file-input').addEventListener('change', e => {
-  const pat = /p(\d+)_\d+\.(jpe?g|png|gif|webp)/i;
-  episodes = {};
+async function handleFileSelection(e) {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
 
-  Array.from(e.target.files).forEach(f => {
-    const m = f.name.match(pat);
-    if (!m) return;
-    const ep = +m[1];
-    (episodes[ep] = episodes[ep] || []).push(f);
-  });
+  loadingNote.textContent = `파일 ${files.length.toLocaleString()}개 정리 중...`;
 
-  Object.values(episodes).forEach(arr =>
-    arr.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-  );
+  await nextFrame();
 
+  episodes = buildEpisodes(files);
   epKeys = Object.keys(episodes).map(Number).sort((a, b) => a - b);
 
-  if (!epKeys.length) { alert('p001_001.jpg 형식 파일을 찾을 수 없어요.'); return; }
+  if (!epKeys.length) {
+    alert('p001_001.jpg 형식 파일을 찾을 수 없어요.');
+    loadingNote.textContent = '';
+    return;
+  }
+
+  currentMangaId = buildMangaId(files, epKeys);
+  currentMangaTitle = extractMangaTitle(files);
 
   document.getElementById('upload-screen').style.display = 'none';
-  document.getElementById('viewer-app').style.display   = 'block';
-  document.getElementById('total-label').textContent = `총 ${epKeys.length}화`;
+  document.getElementById('viewer-app').style.display = 'block';
+  document.getElementById('total-label').textContent = `${currentMangaTitle} · 총 ${epKeys.length}화`;
+  document.getElementById('manga-id-label').textContent = currentMangaTitle;
 
   renderList();
+  loadingNote.textContent = '';
 
-  const saved = loadProg();
+  const saved = getCurrentProgress();
   if (saved && episodes[saved.ep]) {
-    loadEp(saved.ep, saved.pair);
-    showToast(getResumeToast(saved.ep, saved.pair));
+    curMode = saved.mode || curMode;
+    syncModeButtons();
+    if (curMode === 'webtoon') {
+      loadEp(saved.ep, 0, { preserveMode: true, page: saved.page || 1, restoreWebtoonPage: true });
+    } else {
+      loadEp(saved.ep, saved.pair || 0, { preserveMode: true });
+    }
+    showToast(getResumeToast(saved));
   } else {
-    loadEp(epKeys[0], 0);
+    loadEp(epKeys[0], 0, { preserveMode: true });
   }
-});
+}
 
-// ── 목록 렌더 ──────────────────────────────────────────
+function buildEpisodes(files) {
+  const map = {};
+  const pat = /p(\d+)_\d+\.(jpe?g|png|gif|webp|avif)$/i;
+
+  for (const file of files) {
+    const match = file.name.match(pat);
+    if (!match) continue;
+    const ep = +match[1];
+    (map[ep] = map[ep] || []).push(file);
+  }
+
+  for (const arr of Object.values(map)) {
+    arr.sort((a, b) => {
+      const pathA = a.webkitRelativePath || a.name;
+      const pathB = b.webkitRelativePath || b.name;
+      return pathA.localeCompare(pathB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  return map;
+}
+
+function buildMangaId(files, episodeKeys) {
+  const root = extractMangaTitle(files);
+  const first = files[0]?.webkitRelativePath || files[0]?.name || '';
+  const last = files[files.length - 1]?.webkitRelativePath || files[files.length - 1]?.name || '';
+  const signature = [root, files.length, episodeKeys.length, first, last].join('|');
+  return 'manga_' + hashString(signature);
+}
+
+function extractMangaTitle(files) {
+  const sample = files.find(file => file.webkitRelativePath) || files[0];
+  if (!sample) return 'Untitled';
+  const path = sample.webkitRelativePath || sample.name;
+  return path.split('/')[0] || 'Untitled';
+}
+
+function hashString(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function renderList() {
-  const saved = loadProg();
+  const progressStore = readProgressStore();
+  const currentProgress = progressStore[currentMangaId] || null;
+
   document.getElementById('ep-list').innerHTML = epKeys.map(ep => {
-    const total = getSpreads(episodes[ep]).length;
-    const isMe  = saved && saved.ep === ep;
-    const pct   = isMe ? Math.min(100, Math.round(((saved.pair + 1) / total) * 100)) : null;
-    return `<div class="ep-item ${curEp === ep ? 'active' : ''}" id="ei-${ep}" onclick="loadEp(${ep},0)">
-      <span class="ep-label">${ep}화</span>
-      <div class="ep-meta">
-        <span class="ep-pages">${episodes[ep].length}p</span>
-        ${pct !== null ? `<span class="ep-prog">${pct}%</span>` : ''}
+    const files = episodes[ep];
+    const episodePageCount = files.length;
+    const saved = currentProgress && currentProgress.ep === ep ? currentProgress : null;
+    const percent = saved
+      ? Math.min(100, Math.round(((saved.mode === 'webtoon' ? saved.page : spreadToLastPage(ep, saved.pair || 0)) / episodePageCount) * 100))
+      : null;
+    return `
+      <div class="ep-item ${curEp === ep ? 'active' : ''}" id="ei-${ep}" onclick="loadEp(${ep}, 0)">
+        <div class="ep-main">
+          <span class="ep-label">${ep}화</span>
+          <span class="ep-sub">${saved ? `${saved.mode === 'webtoon' ? `${saved.page}p` : `${saved.pair + 1}컷`} 이어보기` : '준비됨'}</span>
+        </div>
+        <div class="ep-meta">
+          <span class="ep-pages">${episodePageCount}p</span>
+          ${percent !== null ? `<span class="ep-prog">${percent}%</span>` : ''}
+        </div>
       </div>
-    </div>`;
+    `;
   }).join('');
 }
 
-// ── 회차 로드 ──────────────────────────────────────────
-function loadEp(ep, pair = 0) {
-  urls.forEach(u => URL.revokeObjectURL(u));
-  urls = [];
+function loadEp(ep, pair = 0, options = {}) {
+  const { preserveMode = false, page = 1, restoreWebtoonPage = false } = options;
+  releaseEpisodeUrls();
 
-  if (curEp !== null) {
-    const prev = document.getElementById(`ei-${curEp}`);
-    if (prev) prev.classList.remove('active');
+  if (!preserveMode) {
+    const saved = getCurrentProgress();
+    if (saved?.mode) curMode = saved.mode;
   }
 
-  curEp  = ep;
-  curPair = pair;
+  if (curEp !== null) {
+    document.getElementById(`ei-${curEp}`)?.classList.remove('active');
+  }
 
-  const el = document.getElementById(`ei-${ep}`);
-  if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
+  curEp = ep;
+  curPair = pair;
+  curPage = page;
+
+  document.getElementById(`ei-${ep}`)?.classList.add('active');
+  document.getElementById(`ei-${ep}`)?.scrollIntoView({ block: 'nearest' });
 
   closeSidebar();
   document.getElementById('end-screen').classList.remove('visible');
-  drawSpread();
+  syncModeButtons();
+  if (curMode === 'webtoon') {
+    renderWebtoonReader(ep, { page, restoreWebtoonPage });
+  } else {
+    drawSpread();
+  }
 }
 
-// ── 스프레드 그리기 ────────────────────────────────────
+function setReaderMode(mode) {
+  if (curMode === mode) return;
+  curMode = mode;
+  try { localStorage.setItem(READER_MODE_KEY, curMode); } catch (e) {}
+  syncModeButtons();
+  if (!curEp) return;
+
+  if (curMode === 'webtoon') {
+    const page = getCurrentSpreadLastPage();
+    renderWebtoonReader(curEp, { page, restoreWebtoonPage: true });
+  } else {
+    curPair = pageToPair(curEp, curPage);
+    drawSpread();
+  }
+}
+
+function toggleReaderMode() {
+  setReaderMode(curMode === 'spread' ? 'webtoon' : 'spread');
+}
+
+function syncModeButtons() {
+  document.getElementById('mode-spread-btn').classList.toggle('active', curMode === 'spread');
+  document.getElementById('mode-webtoon-btn').classList.toggle('active', curMode === 'webtoon');
+  document.getElementById('hud-mode').classList.toggle('active', curMode === 'webtoon');
+  document.getElementById('hud-first-single').style.display = curMode === 'spread' ? 'grid' : 'none';
+  spreadReader.style.display = curMode === 'spread' ? 'flex' : 'none';
+  webtoonReader.style.display = curMode === 'webtoon' ? 'block' : 'none';
+  document.getElementById('webtoon-fab').classList.toggle('visible', curMode === 'webtoon');
+  document.getElementById('hud').classList.toggle('visible', curMode === 'webtoon' || navOn);
+  document.getElementById('nav-ov').style.display = curMode === 'spread' && navOn ? 'flex' : '';
+  document.getElementById('z-left').style.display = curMode === 'spread' ? 'block' : 'none';
+  document.getElementById('z-center').style.display = curMode === 'spread' ? 'block' : 'none';
+  document.getElementById('z-right').style.display = curMode === 'spread' ? 'block' : 'none';
+  updateHUD();
+}
+
 function drawSpread() {
+  if (!curEp) return;
   const files = episodes[curEp];
   const spreads = getSpreads(files);
 
   if (curPair < 0) curPair = 0;
-  if (curPair >= spreads.length) { handleEnd(); return; }
-
-  const currentSpread = spreads[curPair];
-  const rightFile = currentSpread.right;
-  const leftFile = currentSpread.left;
-
-  const spread = document.getElementById('spread');
-  const imgR   = document.getElementById('img-r');
-  const imgL   = document.getElementById('img-l');
-
-  if (rightFile) {
-    const uR = URL.createObjectURL(rightFile); urls.push(uR); imgR.src = uR;
-  } else {
-    imgR.src = '';
+  if (curPair >= spreads.length) {
+    handleEnd();
+    return;
   }
+
+  const spread = spreads[curPair];
+  const rightFile = spread.right;
+  const leftFile = spread.left;
+  const spreadEl = document.getElementById('spread');
+  const imgR = document.getElementById('img-r');
+  const imgL = document.getElementById('img-l');
+
+  imgR.classList.remove('ready');
+  imgL.classList.remove('ready');
+
+  if (rightFile) setImageSource(imgR, rightFile);
+  else imgR.removeAttribute('src');
 
   if (leftFile) {
-    const uL = URL.createObjectURL(leftFile); urls.push(uL); imgL.src = uL;
-    spread.classList.remove('single');
+    setImageSource(imgL, leftFile);
+    spreadEl.classList.remove('single');
   } else {
-    imgL.src = '';
-    spread.classList.add('single');
+    imgL.removeAttribute('src');
+    spreadEl.classList.add('single');
   }
 
-  saveProg(curEp, curPair);
+  curPage = spread.pages[0];
   updateHUD();
+  saveCurrentProgress();
   renderList();
+  preloadSpreadNeighbors();
 }
 
-// ── 탭 처리 ────────────────────────────────────────────
-function tapLeft() {                                      // 다음 페이지
+function preloadSpreadNeighbors() {
   const spreads = getSpreads(episodes[curEp]);
-  if (curPair + 1 < spreads.length) { curPair++; drawSpread(); }
-  else handleEnd();
-  hideNav();
+  [spreads[curPair - 1], spreads[curPair + 1]].forEach(spread => {
+    if (!spread) return;
+    if (spread.right) ensureObjectUrl(spread.right);
+    if (spread.left) ensureObjectUrl(spread.left);
+  });
 }
 
-function tapRight() {                                     // 이전 페이지
-  if (curPair > 0) { curPair--; drawSpread(); }
-  else {
-    const idx = epKeys.indexOf(curEp);
-    if (idx > 0) {
-      const prev = epKeys[idx - 1];
-      loadEp(prev, getSpreads(episodes[prev]).length - 1);
-      showToast(`${prev}화`);
-    } else {
-      showToast('첫 번째 화입니다');
+function renderWebtoonReader(startEp, options = {}) {
+  const { page = 1, restoreWebtoonPage = false } = options;
+  disconnectWebtoonObservers();
+  webtoonVisible = [];
+  webtoonRenderedEpisodes = [startEp];
+  webtoonAutoloaded = new Set([startEp]);
+  webtoonLoadingNext = false;
+  webtoonStack.innerHTML = '';
+
+  renderWebtoonEpisodeBlock(startEp);
+  observeWebtoonSentinel();
+  updateHUD();
+  saveCurrentProgress();
+  renderList();
+
+  requestAnimationFrame(() => {
+    webtoonReader.scrollTop = 0;
+    if (restoreWebtoonPage) scrollToWebtoonPage(startEp, page);
+  });
+}
+
+function renderWebtoonEpisodeBlock(ep) {
+  const files = episodes[ep];
+  if (!files || !files.length) return;
+
+  const block = document.createElement('section');
+  block.className = 'episode-block';
+  block.dataset.ep = String(ep);
+  block.innerHTML = `
+    <div class="episode-head">
+      <div class="episode-title">${ep}화</div>
+      <div class="episode-meta">${files.length} pages</div>
+    </div>
+    <div class="webtoon-images"></div>
+  `;
+
+  const imagesWrap = block.querySelector('.webtoon-images');
+  const batchSize = 12;
+
+  for (let i = 0; i < files.length; i += batchSize) {
+    const fragment = document.createDocumentFragment();
+    files.slice(i, i + batchSize).forEach((file, offset) => {
+      const frame = document.createElement('div');
+      const page = extractPageNumber(file.name) || i + offset + 1;
+      frame.className = 'webtoon-frame';
+      frame.dataset.ep = String(ep);
+      frame.dataset.page = String(page);
+      frame.innerHTML = '<img alt="">';
+      const img = frame.querySelector('img');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img._file = file;
+      fragment.appendChild(frame);
+    });
+    imagesWrap.appendChild(fragment);
+  }
+
+  webtoonStack.appendChild(block);
+  observeWebtoonImages(block);
+}
+
+function observeWebtoonImages(block) {
+  if (!webtoonObserver) {
+    webtoonObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        const frame = entry.target;
+        if (entry.isIntersecting) {
+          loadWebtoonFrame(frame);
+          webtoonVisibleState(frame, true);
+        } else {
+          webtoonVisibleState(frame, false);
+        }
+      }
+      updateCurrentWebtoonProgress();
+    }, {
+      root: webtoonReader,
+      rootMargin: '1200px 0px 1200px 0px',
+      threshold: [0.05, 0.6]
+    });
+  }
+
+  block.querySelectorAll('.webtoon-frame').forEach(frame => webtoonObserver.observe(frame));
+}
+
+function observeWebtoonSentinel() {
+  if (webtoonSentinelObserver) webtoonSentinelObserver.disconnect();
+  webtoonSentinelObserver = new IntersectionObserver(entries => {
+    const entry = entries[0];
+    if (!entry?.isIntersecting) return;
+    if (curMode !== 'webtoon') return;
+    maybeAppendNextEpisode();
+  }, {
+    root: webtoonReader,
+    rootMargin: '1000px 0px 1000px 0px'
+  });
+  webtoonSentinelObserver.observe(webtoonSentinel);
+}
+
+function maybeAppendNextEpisode() {
+  if (webtoonLoadingNext || !document.getElementById('binge').checked) return;
+  const lastEp = webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1];
+  const idx = epKeys.indexOf(lastEp);
+  if (idx < 0 || idx >= epKeys.length - 1) return;
+
+  const nextEp = epKeys[idx + 1];
+  if (webtoonAutoloaded.has(nextEp)) return;
+
+  webtoonLoadingNext = true;
+  webtoonRenderedEpisodes.push(nextEp);
+  webtoonAutoloaded.add(nextEp);
+  renderWebtoonEpisodeBlock(nextEp);
+  showToast(`${nextEp}화 이어서 로드`);
+  webtoonLoadingNext = false;
+}
+
+function loadWebtoonFrame(frame) {
+  if (!frame || frame.classList.contains('loaded')) return;
+  const img = frame.querySelector('img');
+  const file = img?._file;
+  if (!img || !file) return;
+  img.onload = () => frame.classList.add('loaded');
+  img.src = ensureObjectUrl(file);
+}
+
+function webtoonVisibleState(frame, entering) {
+  const ep = Number(frame.dataset.ep);
+  const page = Number(frame.dataset.page);
+  const key = `${ep}:${page}`;
+
+  if (entering) {
+    if (!webtoonVisible.find(item => item.key === key)) {
+      webtoonVisible.push({ key, ep, page, top: frame.getBoundingClientRect().top });
+    }
+  } else {
+    webtoonVisible = webtoonVisible.filter(item => item.key !== key);
+  }
+}
+
+function updateCurrentWebtoonProgress() {
+  if (curMode !== 'webtoon') return;
+  const frames = Array.from(webtoonStack.querySelectorAll('.webtoon-frame'));
+  if (!frames.length) return;
+
+  let chosen = null;
+  let best = Infinity;
+  const readerTop = webtoonReader.getBoundingClientRect().top + 100;
+
+  for (const frame of frames) {
+    const rect = frame.getBoundingClientRect();
+    const dist = Math.abs(rect.top - readerTop);
+    if (dist < best) {
+      best = dist;
+      chosen = frame;
     }
   }
+
+  if (!chosen) return;
+
+  const ep = Number(chosen.dataset.ep);
+  const page = Number(chosen.dataset.page);
+  if (curEp !== ep || curPage !== page) {
+    curEp = ep;
+    curPage = page;
+    curPair = pageToPair(ep, page);
+    highlightEpisodeItem(ep);
+    updateHUD();
+    saveCurrentProgress();
+    renderList();
+  } else {
+    updateHUD();
+    saveCurrentProgress();
+  }
+}
+
+function handleWebtoonScroll() {
+  if (curMode !== 'webtoon') return;
+  updateCurrentWebtoonProgress();
+
+  const nearBottom = webtoonReader.scrollHeight - webtoonReader.scrollTop - webtoonReader.clientHeight < 900;
+  if (nearBottom) maybeAppendNextEpisode();
+}
+
+function scrollToWebtoonPage(ep, page) {
+  const target = webtoonStack.querySelector(`.webtoon-frame[data-ep="${ep}"][data-page="${page}"]`);
+  if (!target) return;
+  target.scrollIntoView({ block: 'start' });
+}
+
+function highlightEpisodeItem(ep) {
+  document.querySelectorAll('.ep-item.active').forEach(el => el.classList.remove('active'));
+  document.getElementById(`ei-${ep}`)?.classList.add('active');
+}
+
+function tapLeft() {
+  if (curMode !== 'spread') return;
+  const spreads = getSpreads(episodes[curEp]);
+  if (curPair + 1 < spreads.length) {
+    curPair++;
+    drawSpread();
+  } else {
+    handleEnd();
+  }
   hideNav();
 }
 
-function tapCenter() { toggleNav(); }
-
-// ── 회차 끝 처리 ───────────────────────────────────────
-function handleEnd() {
-  const binge = document.getElementById('binge').checked;
-  const idx   = epKeys.indexOf(curEp);
-
-  if (binge && idx < epKeys.length - 1) {
-    const next = epKeys[idx + 1];
-    loadEp(next, 0);
-    showToast(`${next}화 시작`);
+function tapRight() {
+  if (curMode !== 'spread') return;
+  if (curPair > 0) {
+    curPair--;
+    drawSpread();
   } else {
-    document.getElementById('end-title').textContent = idx >= epKeys.length - 1 ? '완독!' : `${curEp}화 완료`;
-    document.getElementById('end-sub').textContent   = idx >= epKeys.length - 1
-      ? `${curEp}화까지 모두 읽었어요 🎉`
-      : '다음 화를 선택하세요';
-    document.getElementById('end-screen').classList.add('visible');
+    loadPrevEpisode(true);
   }
+  hideNav();
+}
+
+function tapCenter() {
+  if (curMode !== 'spread') return;
+  toggleNav();
+}
+
+function loadPrevEpisode(goLast = false) {
+  const targetEp = resolvePrevEpisode(curEp);
+  if (!targetEp) {
+    showToast('첫 번째 화입니다');
+    return;
+  }
+  if (curMode === 'webtoon') {
+    loadEp(targetEp, 0, { preserveMode: true, page: goLast ? episodes[targetEp].length : 1, restoreWebtoonPage: true });
+  } else {
+    const pair = goLast ? Math.max(0, getSpreads(episodes[targetEp]).length - 1) : 0;
+    loadEp(targetEp, pair, { preserveMode: true });
+  }
+  showToast(`${targetEp}화`);
+}
+
+function loadNextEpisode() {
+  const targetEp = resolveNextEpisode(curEp);
+  if (!targetEp) {
+    handleEnd();
+    return;
+  }
+  if (curMode === 'webtoon') {
+    loadEp(targetEp, 0, { preserveMode: true, page: 1, restoreWebtoonPage: true });
+  } else {
+    loadEp(targetEp, 0, { preserveMode: true });
+  }
+  showToast(`${targetEp}화`);
+}
+
+function resolvePrevEpisode(ep) {
+  const idx = epKeys.indexOf(ep);
+  return idx > 0 ? epKeys[idx - 1] : null;
+}
+
+function resolveNextEpisode(ep) {
+  const idx = epKeys.indexOf(ep);
+  return idx >= 0 && idx < epKeys.length - 1 ? epKeys[idx + 1] : null;
+}
+
+function handleEnd() {
+  const nextEp = resolveNextEpisode(curEp);
+  if (curMode === 'spread' && document.getElementById('binge').checked && nextEp) {
+    loadEp(nextEp, 0, { preserveMode: true });
+    showToast(`${nextEp}화 시작`);
+    return;
+  }
+
+  document.getElementById('end-title').textContent = nextEp ? `${curEp}화 완료` : '완독!';
+  document.getElementById('end-sub').textContent = nextEp
+    ? '다음 화로 이동하거나 목록에서 회차를 선택하세요.'
+    : `${curEp}화까지 모두 읽었습니다.`;
+  document.getElementById('end-screen').classList.add('visible');
 }
 
 function closeEnd() {
@@ -536,31 +1736,77 @@ function closeEnd() {
   openSidebar();
 }
 
-// ── 네비 화살표 ────────────────────────────────────────
-function toggleNav() { navOn ? hideNav() : showNav(); }
+function toggleNav() {
+  navOn ? hideNav() : showNav();
+}
+
 function showNav() {
+  if (curMode !== 'spread') return;
   navOn = true;
   document.getElementById('nav-ov').classList.add('visible');
   document.getElementById('hud').classList.add('visible');
   clearTimeout(navTimer);
   navTimer = setTimeout(hideNav, 3000);
 }
+
 function hideNav() {
   navOn = false;
   document.getElementById('nav-ov').classList.remove('visible');
-  document.getElementById('hud').classList.remove('visible');
+  if (curMode === 'spread') document.getElementById('hud').classList.remove('visible');
 }
 
-// ── HUD ────────────────────────────────────────────────
 function updateHUD() {
   if (!curEp) return;
-  const spreads = getSpreads(episodes[curEp]);
-  const spread = spreads[curPair];
-  const total = episodes[curEp].length;
-  if (!spread) return;
-  document.getElementById('hud-title').textContent = `${curEp}화`;
-  document.getElementById('hud-page').textContent  =
-    spread.pages.length === 2 ? `${spread.pages[0]}, ${spread.pages[1]} / ${total}p` : `${spread.pages[0]} / ${total}p`;
+  const total = episodes[curEp]?.length || 0;
+  document.getElementById('hud-title').textContent = `${currentMangaTitle} · ${curEp}화`;
+
+  if (curMode === 'webtoon') {
+    document.getElementById('hud-page').textContent = `${curPage} / ${total}p`;
+  } else {
+    const spreads = getSpreads(episodes[curEp]);
+    const spread = spreads[curPair];
+    if (!spread) return;
+    document.getElementById('hud-page').textContent =
+      spread.pages.length === 2
+        ? `${spread.pages[0]}, ${spread.pages[1]} / ${total}p`
+        : `${spread.pages[0]} / ${total}p`;
+  }
+}
+
+function getSpreads(files) {
+  const spreads = [];
+  if (!files?.length) return spreads;
+
+  let start = 0;
+  if (firstSingleInput.checked) {
+    spreads.push({ right: files[0], left: null, pages: [1] });
+    start = 1;
+  }
+
+  for (let i = start; i < files.length; i += 2) {
+    const first = files[i];
+    const second = files[i + 1];
+    if (second) spreads.push({ right: second, left: first, pages: [i + 2, i + 1] });
+    else spreads.push({ right: first, left: null, pages: [i + 1] });
+  }
+  return spreads;
+}
+
+function pageToPair(ep, page) {
+  const spreads = getSpreads(episodes[ep]);
+  const index = spreads.findIndex(spread => spread.pages.includes(page));
+  return index >= 0 ? index : 0;
+}
+
+function spreadToLastPage(ep, pair) {
+  const spreads = getSpreads(episodes[ep]);
+  const spread = spreads[pair];
+  return spread ? Math.max(...spread.pages) : 1;
+}
+
+function getCurrentSpreadLastPage() {
+  if (!curEp || curMode === 'webtoon') return curPage || 1;
+  return spreadToLastPage(curEp, curPair);
 }
 
 function initImageScale() {
@@ -583,45 +1829,37 @@ function applyImageScale(value, persist = true) {
 }
 
 function initFirstSingle() {
-  let enabled = false;
-  try { enabled = localStorage.getItem(FIRST_SINGLE_KEY) === 'true'; } catch (e) {}
-  firstSingleInput.checked = enabled;
+  try {
+    firstSingleInput.checked = localStorage.getItem(FIRST_SINGLE_KEY) === 'true';
+  } catch (e) {
+    firstSingleInput.checked = false;
+  }
 }
 
 function saveFirstSingle(enabled) {
   try { localStorage.setItem(FIRST_SINGLE_KEY, String(enabled)); } catch (e) {}
 }
 
-function getSpreads(files) {
-  const spreads = [];
-  if (!files || !files.length) return spreads;
-
-  let start = 0;
-  if (firstSingleInput.checked) {
-    spreads.push({ right: files[0], left: null, pages: [1] });
-    start = 1;
-  }
-
-  for (let i = start; i < files.length; i += 2) {
-    const first = files[i];
-    const second = files[i + 1];
-    if (second) {
-      spreads.push({ right: second, left: first, pages: [i + 2, i + 1] });
-    } else {
-      spreads.push({ right: first, left: null, pages: [i + 1] });
-    }
-  }
-
-  return spreads;
+function initReaderMode() {
+  try {
+    const saved = localStorage.getItem(READER_MODE_KEY);
+    if (saved === 'spread' || saved === 'webtoon') curMode = saved;
+  } catch (e) {}
 }
 
-function getResumeToast(ep, pair) {
-  const spreads = getSpreads(episodes[ep]);
-  const spread = spreads[pair];
-  if (!spread) return `${ep}화 이어보기`;
-  return spread.pages.length === 2
-    ? `${ep}화 ${spread.pages[0]}, ${spread.pages[1]}p 부터 이어보기`
-    : `${ep}화 ${spread.pages[0]}p 부터 이어보기`;
+function syncFirstSingleHUD() {
+  document.getElementById('hud-first-single').classList.toggle('active', firstSingleInput.checked);
+}
+
+function toggleFirstSingleHUD() {
+  if (curMode !== 'spread') return;
+  firstSingleInput.checked = !firstSingleInput.checked;
+  saveFirstSingle(firstSingleInput.checked);
+  syncFirstSingleHUD();
+  if (curEp) {
+    curPair = pageToPair(curEp, curPage);
+    drawSpread();
+  }
 }
 
 async function toggleFullscreen(enabled) {
@@ -641,71 +1879,324 @@ function syncFullscreenToggle() {
   fullscreenToggle.checked = !!document.fullscreenElement;
 }
 
-function syncFirstSingleHUD() {
-  const btn = document.getElementById('hud-first-single');
-  if (!btn) return;
-  if (firstSingleInput.checked) btn.classList.add('active');
-  else btn.classList.remove('active');
-}
-
-function toggleFirstSingleHUD() {
-  firstSingleInput.checked = !firstSingleInput.checked;
-  saveFirstSingle(firstSingleInput.checked);
-  syncFirstSingleHUD();
-  if (curEp) {
-    const spreads = getSpreads(episodes[curEp]);
-    if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
-    drawSpread();
-  }
-}
-
-// ── 사이드바 ───────────────────────────────────────────
 function toggleSidebar() {
   document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
 }
+
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sb-overlay').classList.add('open');
 }
+
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sb-overlay').classList.remove('open');
 }
 
-// ── 토스트 ─────────────────────────────────────────────
-let toastTimer;
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = msg;
+  t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-// ── 진행 저장 ──────────────────────────────────────────
-function saveProg(ep, pair) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ep, pair })); } catch(e) {}
-}
-function loadProg() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch(e) { return null; }
+function readProgressStore() {
+  try {
+    return JSON.parse(localStorage.getItem(PROGRESS_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
 }
 
-// ── 리셋 ───────────────────────────────────────────────
+function writeProgressStore(store) {
+  try {
+    localStorage.setItem(PROGRESS_STORE_KEY, JSON.stringify(store));
+  } catch (e) {}
+}
+
+function getCurrentProgress() {
+  if (!currentMangaId) return null;
+  return readProgressStore()[currentMangaId] || null;
+}
+
+function saveCurrentProgress() {
+  if (!currentMangaId || !curEp) return;
+  clearTimeout(saveProgressTimer);
+  saveProgressTimer = setTimeout(() => {
+    const store = readProgressStore();
+    store[currentMangaId] = {
+      mangaId: currentMangaId,
+      title: currentMangaTitle,
+      ep: curEp,
+      pair: curPair,
+      page: curPage,
+      mode: curMode,
+      updatedAt: Date.now()
+    };
+    writeProgressStore(store);
+    scheduleCloudSync();
+  }, 60);
+}
+
+function getResumeToast(progress) {
+  if (!progress) return '이어보기';
+  return progress.mode === 'webtoon'
+    ? `${progress.ep}화 ${progress.page}p 부터 이어보기`
+    : `${progress.ep}화 ${progress.pair + 1}컷 부터 이어보기`;
+}
+
 function resetApp() {
-  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
-  curEp = null; episodes = {}; epKeys = [];
-  document.getElementById('viewer-app').style.display    = 'none';
+  releaseEpisodeUrls();
+  disconnectWebtoonObservers();
+  curEp = null;
+  curPair = 0;
+  curPage = 1;
+  episodes = {};
+  epKeys = [];
+  currentMangaId = null;
+  currentMangaTitle = '';
+  webtoonStack.innerHTML = '';
+  document.getElementById('viewer-app').style.display = 'none';
   document.getElementById('upload-screen').style.display = 'flex';
   document.getElementById('file-input').value = '';
 }
 
-// ── 키보드 단축키 ──────────────────────────────────────
+function ensureObjectUrl(file) {
+  let url = objectUrlCache.get(file);
+  if (!url) {
+    url = URL.createObjectURL(file);
+    objectUrlCache.set(file, url);
+  }
+  activeObjectUrls.add(url);
+  return url;
+}
+
+function setImageSource(img, file) {
+  const url = ensureObjectUrl(file);
+  img.onload = () => img.classList.add('ready');
+  img.src = url;
+}
+
+function releaseEpisodeUrls() {
+  activeObjectUrls.forEach(url => URL.revokeObjectURL(url));
+  activeObjectUrls.clear();
+  objectUrlCache = new WeakMap();
+}
+
+function disconnectWebtoonObservers() {
+  if (webtoonObserver) webtoonObserver.disconnect();
+  if (webtoonSentinelObserver) webtoonSentinelObserver.disconnect();
+  webtoonObserver = null;
+  webtoonSentinelObserver = null;
+}
+
+function extractPageNumber(name) {
+  const match = name.match(/_(\d+)\./);
+  return match ? Number(match[1]) : 0;
+}
+
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
 document.addEventListener('keydown', e => {
   if (!curEp) return;
-  if (e.key === 'ArrowLeft')  tapLeft();
-  if (e.key === 'ArrowRight') tapRight();
-  if (e.key === ' ')          { e.preventDefault(); toggleNav(); }
-  if (e.key === 'Escape')     closeSidebar();
+  if (curMode === 'spread') {
+    if (e.key === 'ArrowLeft') tapLeft();
+    if (e.key === 'ArrowRight') tapRight();
+    if (e.key === ' ') {
+      e.preventDefault();
+      toggleNav();
+    }
+  } else {
+    if (e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault();
+      webtoonReader.scrollBy({ top: Math.round(window.innerHeight * 0.85), behavior: 'smooth' });
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      webtoonReader.scrollBy({ top: -Math.round(window.innerHeight * 0.85), behavior: 'smooth' });
+    }
+  }
+  if (e.key === 'Escape') closeSidebar();
 });
+
+window.addEventListener('beforeunload', () => {
+  saveCurrentProgress();
+  if (cloud.user) syncCloudNow(true);
+});
+
+function saveCloudConfig() {
+  const config = getCloudConfigFromInputs();
+  try { localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(config)); } catch (e) {}
+  setCloudStatus('클라우드 설정 저장됨');
+  initCloudFromSavedConfig(true);
+}
+
+function hydrateCloudConfigInputs() {
+  try {
+    const config = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || '{}');
+    document.getElementById('cloud-api-key').value = config.apiKey || '';
+    document.getElementById('cloud-auth-domain').value = config.authDomain || '';
+    document.getElementById('cloud-project-id').value = config.projectId || '';
+    document.getElementById('cloud-app-id').value = config.appId || '';
+    document.getElementById('cloud-email').value = config.email || '';
+    document.getElementById('cloud-password').value = config.password || '';
+  } catch (e) {}
+}
+
+function getCloudConfigFromInputs() {
+  return {
+    apiKey: document.getElementById('cloud-api-key').value.trim(),
+    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
+    projectId: document.getElementById('cloud-project-id').value.trim(),
+    appId: document.getElementById('cloud-app-id').value.trim(),
+    email: document.getElementById('cloud-email').value.trim(),
+    password: document.getElementById('cloud-password').value
+  };
+}
+
+function initCloudFromSavedConfig(force = false) {
+  let config = null;
+  try { config = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || 'null'); } catch (e) {}
+  if (!config?.apiKey || !config?.projectId || !config?.appId || !config?.authDomain) return;
+  initCloud(config, force);
+}
+
+function initCloud(config, force = false) {
+  if (cloud.initialized && !force) return;
+  try {
+    if (cloud.app) {
+      cloud.app.delete?.();
+    }
+  } catch (e) {}
+
+  try {
+    cloud.app = firebase.initializeApp({
+      apiKey: config.apiKey,
+      authDomain: config.authDomain,
+      projectId: config.projectId,
+      appId: config.appId
+    }, `manga-viewer-${config.projectId}`);
+    cloud.auth = firebase.auth(cloud.app);
+    cloud.db = firebase.firestore(cloud.app);
+    cloud.initialized = true;
+
+    cloud.auth.onAuthStateChanged(async user => {
+      cloud.user = user || null;
+      if (user) {
+        setCloudStatus(`${user.email || user.uid} 연결됨`);
+        await pullCloudProgress();
+      } else {
+        setCloudStatus('로그인 필요');
+      }
+    });
+    setCloudStatus('클라우드 준비됨');
+  } catch (e) {
+    console.error(e);
+    setCloudStatus('클라우드 초기화 실패');
+  }
+}
+
+async function cloudLogin() {
+  if (!cloud.initialized) saveCloudConfig();
+  if (!cloud.auth) return;
+  const { email, password } = getCloudConfigFromInputs();
+  if (!email || !password) {
+    setCloudStatus('이메일과 비밀번호를 입력하세요');
+    return;
+  }
+  try {
+    await cloud.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    await cloud.auth.signInWithEmailAndPassword(email, password);
+    setCloudStatus('로그인 완료');
+  } catch (e) {
+    console.error(e);
+    setCloudStatus(`로그인 실패: ${e.code || 'unknown'}`);
+  }
+}
+
+async function cloudRegister() {
+  if (!cloud.initialized) saveCloudConfig();
+  if (!cloud.auth) return;
+  const { email, password } = getCloudConfigFromInputs();
+  if (!email || !password) {
+    setCloudStatus('이메일과 비밀번호를 입력하세요');
+    return;
+  }
+  try {
+    await cloud.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    await cloud.auth.createUserWithEmailAndPassword(email, password);
+    setCloudStatus('회원가입 완료');
+  } catch (e) {
+    console.error(e);
+    setCloudStatus(`회원가입 실패: ${e.code || 'unknown'}`);
+  }
+}
+
+function scheduleCloudSync() {
+  if (!cloud.user) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => syncCloudNow(), 700);
+}
+
+async function syncCloudNow(silent = false) {
+  if (!cloud.user || !cloud.db) return;
+  try {
+    const store = readProgressStore();
+    await cloud.db.collection('mangaProgress').doc(cloud.user.uid).set({
+      updatedAt: Date.now(),
+      books: store
+    }, { merge: true });
+    if (!silent) setCloudStatus('클라우드 동기화 완료');
+  } catch (e) {
+    console.error(e);
+    if (!silent) setCloudStatus(`동기화 실패: ${e.code || 'unknown'}`);
+  }
+}
+
+async function pullCloudProgress() {
+  if (!cloud.user || !cloud.db) return;
+  try {
+    const snapshot = await cloud.db.collection('mangaProgress').doc(cloud.user.uid).get();
+    if (!snapshot.exists) {
+      await syncCloudNow(true);
+      setCloudStatus('새 클라우드 계정 연결됨');
+      return;
+    }
+
+    const remote = snapshot.data()?.books || {};
+    const local = readProgressStore();
+    const merged = mergeProgressStore(local, remote);
+    writeProgressStore(merged);
+    renderList();
+
+    const current = getCurrentProgress();
+    if (current && episodes[current.ep] && curEp !== current.ep) {
+      loadEp(current.ep, current.pair || 0, { preserveMode: true, page: current.page || 1, restoreWebtoonPage: current.mode === 'webtoon' });
+    }
+    setCloudStatus('클라우드 진행도 불러옴');
+  } catch (e) {
+    console.error(e);
+    setCloudStatus(`불러오기 실패: ${e.code || 'unknown'}`);
+  }
+}
+
+function mergeProgressStore(local, remote) {
+  const merged = { ...local };
+  for (const [mangaId, progress] of Object.entries(remote || {})) {
+    const current = merged[mangaId];
+    if (!current || (progress.updatedAt || 0) > (current.updatedAt || 0)) {
+      merged[mangaId] = progress;
+    }
+  }
+  return merged;
+}
+
+function setCloudStatus(text) {
+  document.getElementById('cloud-status').textContent = text;
+}
 </script>
 </body>
 </html>
