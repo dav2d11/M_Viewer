@@ -1341,6 +1341,9 @@ const IMG_SIZE_KEY = 'manga_img_scale_v1';
 const FIRST_SINGLE_KEY = 'manga_first_single_v1';
 const READER_MODE_KEY = 'manga_reader_mode_v1';
 const CLOUD_CONFIG_KEY = 'manga_cloud_config_v1';
+const FILE_PROCESS_CHUNK = 250;
+const LARGE_SELECTION_THRESHOLD = 4000;
+const WEBTOON_UNLOAD_DISTANCE = 2400;
 
 let episodes = {};
 let epKeys = [];
@@ -1354,7 +1357,7 @@ let navOn = false;
 let navTimer = null;
 let toastTimer = null;
 
-let objectUrlCache = new WeakMap();
+let objectUrlCache = new Map();
 let activeObjectUrls = new Set();
 let webtoonObserver = null;
 let webtoonSentinelObserver = null;
@@ -1408,14 +1411,16 @@ hydrateCloudConfigInputs();
 initCloudFromSavedConfig();
 
 async function handleFileSelection(e) {
-  const files = Array.from(e.target.files || []);
-  if (!files.length) return;
+  const fileList = e.target.files;
+  const totalFiles = fileList?.length || 0;
+  if (!totalFiles) return;
 
-  loadingNote.textContent = `파일 ${files.length.toLocaleString()}개 정리 중...`;
+  loadingNote.textContent = `파일 ${totalFiles.toLocaleString()}개 정리 중...`;
 
   await nextFrame();
 
-  episodes = buildEpisodes(files);
+  const files = [];
+  episodes = await buildEpisodesInChunks(fileList, files);
   epKeys = Object.keys(episodes).map(Number).sort((a, b) => a - b);
 
   if (!epKeys.length) {
@@ -1426,6 +1431,9 @@ async function handleFileSelection(e) {
 
   currentMangaId = buildMangaId(files, epKeys);
   currentMangaTitle = extractMangaTitle(files);
+  if (files.length >= LARGE_SELECTION_THRESHOLD) {
+    document.getElementById('binge').checked = false;
+  }
 
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('viewer-app').style.display = 'block';
@@ -1448,6 +1456,41 @@ async function handleFileSelection(e) {
   } else {
     loadEp(epKeys[0], 0, { preserveMode: true });
   }
+}
+
+async function buildEpisodesInChunks(fileList, collectedFiles) {
+  const map = {};
+  const pat = /p(\d+)_\d+\.(jpe?g|png|gif|webp|avif)$/i;
+  const total = fileList?.length || 0;
+
+  for (let start = 0; start < total; start += FILE_PROCESS_CHUNK) {
+    const end = Math.min(total, start + FILE_PROCESS_CHUNK);
+    for (let i = start; i < end; i++) {
+      const file = fileList[i];
+      collectedFiles.push(file);
+      const match = file.name.match(pat);
+      if (!match) continue;
+      const ep = +match[1];
+      (map[ep] = map[ep] || []).push(file);
+    }
+
+    loadingNote.textContent = `파일 ${total.toLocaleString()}개 정리 중... ${end.toLocaleString()} / ${total.toLocaleString()}`;
+    await yieldToBrowser();
+  }
+
+  loadingNote.textContent = '회차 정렬 중...';
+  await yieldToBrowser();
+
+  for (const arr of Object.values(map)) {
+    arr.sort((a, b) => {
+      const pathA = a.webkitRelativePath || a.name;
+      const pathB = b.webkitRelativePath || b.name;
+      return pathA.localeCompare(pathB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    await yieldToBrowser();
+  }
+
+  return map;
 }
 
 function buildEpisodes(files) {
@@ -1707,6 +1750,7 @@ function observeWebtoonImages(block) {
           webtoonVisibleState(frame, true);
         } else {
           webtoonVisibleState(frame, false);
+          maybeUnloadWebtoonFrame(frame);
         }
       }
       updateCurrentWebtoonProgress();
@@ -1767,7 +1811,7 @@ function webtoonVisibleState(frame, entering) {
 
   if (entering) {
     if (!webtoonVisible.find(item => item.key === key)) {
-      webtoonVisible.push({ key, ep, page, top: frame.getBoundingClientRect().top });
+      webtoonVisible.push({ key, ep, page, frame });
     }
   } else {
     webtoonVisible = webtoonVisible.filter(item => item.key !== key);
@@ -1776,19 +1820,18 @@ function webtoonVisibleState(frame, entering) {
 
 function updateCurrentWebtoonProgress() {
   if (curMode !== 'webtoon') return;
-  const frames = Array.from(webtoonStack.querySelectorAll('.webtoon-frame'));
-  if (!frames.length) return;
+  if (!webtoonVisible.length) return;
 
   let chosen = null;
   let best = Infinity;
   const readerTop = webtoonReader.getBoundingClientRect().top + 100;
 
-  for (const frame of frames) {
-    const rect = frame.getBoundingClientRect();
+  for (const item of webtoonVisible) {
+    const rect = item.frame.getBoundingClientRect();
     const dist = Math.abs(rect.top - readerTop);
     if (dist < best) {
       best = dist;
-      chosen = frame;
+      chosen = item.frame;
     }
   }
 
@@ -1797,13 +1840,14 @@ function updateCurrentWebtoonProgress() {
   const ep = Number(chosen.dataset.ep);
   const page = Number(chosen.dataset.page);
   if (curEp !== ep || curPage !== page) {
+    const prevEp = curEp;
     curEp = ep;
     curPage = page;
     curPair = pageToPair(ep, page);
     highlightEpisodeItem(ep);
     updateHUD();
     saveCurrentProgress();
-    renderList();
+    if (prevEp !== ep) renderList();
   } else {
     updateHUD();
     saveCurrentProgress();
@@ -2161,16 +2205,42 @@ function ensureObjectUrl(file) {
   return url;
 }
 
+function releaseObjectUrl(file) {
+  if (!file) return;
+  const url = objectUrlCache.get(file);
+  if (!url) return;
+  URL.revokeObjectURL(url);
+  activeObjectUrls.delete(url);
+  objectUrlCache.delete(file);
+}
+
 function setImageSource(img, file) {
   const url = ensureObjectUrl(file);
   img.onload = () => img.classList.add('ready');
   img.src = url;
 }
 
+function maybeUnloadWebtoonFrame(frame) {
+  if (!frame) return;
+  const rect = frame.getBoundingClientRect();
+  if (Math.abs(rect.top) < WEBTOON_UNLOAD_DISTANCE) return;
+  unloadWebtoonFrame(frame);
+}
+
+function unloadWebtoonFrame(frame) {
+  const img = frame.querySelector('img');
+  const file = img?._file;
+  if (!img || !file || !img.getAttribute('src')) return;
+  img.onload = null;
+  img.removeAttribute('src');
+  frame.classList.remove('loaded');
+  releaseObjectUrl(file);
+}
+
 function releaseEpisodeUrls() {
   activeObjectUrls.forEach(url => URL.revokeObjectURL(url));
   activeObjectUrls.clear();
-  objectUrlCache = new WeakMap();
+  objectUrlCache = new Map();
 }
 
 function disconnectWebtoonObservers() {
@@ -2187,6 +2257,10 @@ function extractPageNumber(name) {
 
 function nextFrame() {
   return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
+function yieldToBrowser() {
+  return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 document.addEventListener('keydown', e => {
