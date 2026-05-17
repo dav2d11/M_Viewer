@@ -1147,36 +1147,6 @@
     justify-self: end;
   }
 
-  #webtoon-fab {
-    position: absolute;
-    right: 18px;
-    bottom: 18px;
-    z-index: 26;
-    display: none;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 999px;
-    background: rgba(12, 14, 18, 0.86);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    color: var(--text);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.30);
-  }
-
-  #webtoon-fab.visible {
-    display: flex;
-  }
-
-  .fab-pill {
-    padding: 9px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text);
-    cursor: pointer;
-  }
-
   #end-screen {
     display: none;
     position: absolute;
@@ -1509,12 +1479,6 @@
       <button class="hud-btn" id="hud-mode" onclick="toggleReaderMode()" title="리더 모드 전환">↕</button>
       <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
       <button class="hud-btn" onclick="toggleSidebar()" title="메뉴">☰</button>
-    </div>
-
-    <div id="webtoon-fab">
-      <button class="fab-pill" onclick="loadPrevEpisode()">이전화</button>
-      <button class="fab-pill" onclick="openSidebar()">목록</button>
-      <button class="fab-pill" onclick="loadNextEpisode()">다음화</button>
     </div>
 
     <div id="end-screen">
@@ -1956,10 +1920,7 @@ function buildEpisodes(files) {
 
 function buildMangaId(files, episodeKeys) {
   const root = extractMangaTitle(files);
-  const first = getEntryPath(files[0]);
-  const last = getEntryPath(files[files.length - 1]);
-  const signature = [root, files.length, episodeKeys.length, first, last].join('|');
-  return 'manga_' + hashString(signature);
+  return 'manga_' + hashString(root.trim().toLowerCase());
 }
 
 function extractMangaTitle(files) {
@@ -2090,7 +2051,6 @@ function syncModeButtons() {
   document.getElementById('hud-first-single').style.display = curMode === 'spread' ? 'grid' : 'none';
   spreadReader.style.display = curMode === 'spread' ? 'flex' : 'none';
   webtoonReader.style.display = curMode === 'webtoon' ? 'block' : 'none';
-  document.getElementById('webtoon-fab').classList.toggle('visible', curMode === 'webtoon');
   document.getElementById('hud').classList.toggle('visible', curMode === 'webtoon' || navOn);
   document.getElementById('nav-ov').style.display = curMode === 'spread' && navOn ? 'flex' : '';
   document.getElementById('z-left').style.display = curMode === 'spread' ? 'block' : 'none';
@@ -2625,7 +2585,7 @@ function showToast(msg) {
 
 function readProgressStore() {
   try {
-    return JSON.parse(localStorage.getItem(PROGRESS_STORE_KEY)) || {};
+    return normalizeProgressStore(JSON.parse(localStorage.getItem(PROGRESS_STORE_KEY)) || {});
   } catch (e) {
     return {};
   }
@@ -2633,9 +2593,33 @@ function readProgressStore() {
 
 function writeProgressStore(store) {
   try {
-    localStorage.setItem(PROGRESS_STORE_KEY, JSON.stringify(store));
+    localStorage.setItem(PROGRESS_STORE_KEY, JSON.stringify(normalizeProgressStore(store)));
   } catch (e) {}
   renderLibraryDashboard();
+}
+
+function normalizeProgressTitle(title) {
+  return String(title || '').trim().toLowerCase();
+}
+
+function progressStoreKey(progress, fallbackId) {
+  const normalizedTitle = normalizeProgressTitle(progress?.title);
+  return normalizedTitle ? `manga_${hashString(normalizedTitle)}` : fallbackId;
+}
+
+function normalizeProgressStore(store) {
+  const normalized = {};
+  for (const [mangaId, progress] of Object.entries(store || {})) {
+    if (!progress) continue;
+    const key = progressStoreKey(progress, mangaId);
+    const existing = normalized[key] || null;
+    normalized[key] = {
+      ...pickBetterProgress(existing, progress),
+      mangaId: key,
+      title: progress.title || existing?.title || mangaId
+    };
+  }
+  return normalized;
 }
 
 function getCurrentProgress() {
@@ -2838,14 +2822,24 @@ function progressPositionSignature(progress) {
   return [progress.mode || '', progress.ep || 0, progress.pair || 0, progress.page || 0].join('|');
 }
 
+function compareProgress(localProgress, remoteProgress) {
+  return (localProgress?.updatedAt || 0) - (remoteProgress?.updatedAt || 0);
+}
+
+function pickBetterProgress(localProgress, remoteProgress) {
+  if (!localProgress) return remoteProgress || null;
+  if (!remoteProgress) return localProgress || null;
+  return compareProgress(localProgress, remoteProgress) >= 0 ? localProgress : remoteProgress;
+}
+
 function getProgressComparison(localProgress, remoteProgress) {
   if (localProgress && remoteProgress) {
     if (progressPositionSignature(localProgress) === progressPositionSignature(remoteProgress)) {
       return { label: '같음', className: 'same' };
     }
-    return (localProgress.updatedAt || 0) >= (remoteProgress.updatedAt || 0)
-      ? { label: '이 기기 진행도 앞섬', className: 'local' }
-      : { label: '다른 기기 진행도 앞섬', className: 'remote' };
+    return compareProgress(localProgress, remoteProgress) >= 0
+      ? { label: '이 기기 저장이 최신', className: 'local' }
+      : { label: '클라우드 저장이 최신', className: 'remote' };
   }
   if (localProgress) return { label: '이 기기만 있음', className: 'local' };
   if (remoteProgress) return { label: '다른 기기만 있음', className: 'remote' };
@@ -2875,7 +2869,7 @@ function renderLibraryDashboard() {
 
   const localStore = readProgressStore();
   const ids = Array.from(new Set([...Object.keys(localStore), ...Object.keys(remoteProgressStore)]));
-  deviceCopy.textContent = `현재 기기: ${deviceLabel} · 클라우드 ${cloud.user ? '연결됨' : '비연결'}`;
+  deviceCopy.textContent = `클라우드 ${cloud.user ? '연결됨' : '비연결'} · 충돌 시 클라우드 최신 저장분을 채택합니다`;
 
   if (!ids.length) {
     list.innerHTML = '<div class="library-empty">저장된 진행도가 아직 없습니다.</div>';
@@ -2891,7 +2885,7 @@ function renderLibraryDashboard() {
   list.innerHTML = ids.map(id => {
     const localProgress = localStore[id] || null;
     const remoteProgress = remoteProgressStore[id] || null;
-    const progress = localProgress || remoteProgress;
+    const progress = pickBetterProgress(localProgress, remoteProgress);
     const compare = getProgressComparison(localProgress, remoteProgress);
     const title = progress?.title || id;
     return `
@@ -2901,6 +2895,7 @@ function renderLibraryDashboard() {
           <div class="library-chip ${compare.className}">${compare.label}</div>
         </div>
         <div class="library-meta">
+          <div class="library-chip">선택됨: ${formatProgressLine(progress)}</div>
           <div class="library-chip">이 기기: ${formatProgressLine(localProgress)}</div>
           <div class="library-chip">클라우드: ${formatProgressLine(remoteProgress)}</div>
         </div>
@@ -3095,12 +3090,13 @@ async function syncCloudNow(silent = false) {
   if (!cloud.user || !cloud.db) return;
   try {
     flushCurrentProgress();
-    const store = readProgressStore();
+    const store = mergeProgressStore(readProgressStore(), remoteProgressStore);
+    writeProgressStore(store);
     await cloud.db.collection('mangaProgress').doc(cloud.user.uid).set({
       updatedAt: Date.now(),
       books: store
     }, { merge: true });
-    remoteProgressStore = JSON.parse(JSON.stringify(store));
+    remoteProgressStore = normalizeProgressStore(JSON.parse(JSON.stringify(store)));
     renderLibraryDashboard();
     if (!silent) setCloudStatus('클라우드 동기화 완료');
   } catch (e) {
@@ -3121,17 +3117,26 @@ async function pullCloudProgress() {
       return;
     }
 
-    const remote = snapshot.data()?.books || {};
+    const remote = normalizeProgressStore(snapshot.data()?.books || {});
     remoteProgressStore = remote;
     const local = readProgressStore();
     const merged = mergeProgressStore(local, remote);
     writeProgressStore(merged);
+    const normalizedRemote = normalizeProgressStore(mergeProgressStore(remote, merged));
+    const remoteChanged = JSON.stringify(normalizedRemote) !== JSON.stringify(remote);
+    remoteProgressStore = normalizedRemote;
     renderList();
     renderLibraryDashboard();
 
     const current = getCurrentProgress();
     if (current && episodes[current.ep] && curEp !== current.ep) {
       loadEp(current.ep, current.pair || 0, { preserveMode: true, page: current.page || 1, restoreWebtoonPage: current.mode === 'webtoon' });
+    }
+    if (remoteChanged) {
+      await cloud.db.collection('mangaProgress').doc(cloud.user.uid).set({
+        updatedAt: Date.now(),
+        books: normalizedRemote
+      }, { merge: true });
     }
     setCloudStatus('클라우드 진행도 불러옴');
   } catch (e) {
@@ -3141,12 +3146,10 @@ async function pullCloudProgress() {
 }
 
 function mergeProgressStore(local, remote) {
-  const merged = { ...local };
+  const merged = { ...(local || {}) };
   for (const [mangaId, progress] of Object.entries(remote || {})) {
-    const current = merged[mangaId];
-    if (!current || (progress.updatedAt || 0) > (current.updatedAt || 0)) {
-      merged[mangaId] = progress;
-    }
+    const current = merged[mangaId] || null;
+    merged[mangaId] = pickBetterProgress(current, progress);
   }
   return merged;
 }
