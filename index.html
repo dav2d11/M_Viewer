@@ -690,6 +690,19 @@
     gap: 8px;
   }
 
+  .cloud-actions.triple {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .cloud-advanced {
+    display: none;
+    margin-top: 10px;
+  }
+
+  .cloud-advanced.open {
+    display: block;
+  }
+
   .cloud-note {
     margin-top: 10px;
     font-size: 10px;
@@ -1279,20 +1292,25 @@
               <strong>기기간 진행도 공유</strong>
               <span>Firebase 프로젝트를 연결하면 iPhone, iPad, Mac에서 같은 계정으로 진행도를 동기화합니다.</span>
             </div>
-            <input id="cloud-api-key" placeholder="Firebase API Key">
-            <input id="cloud-auth-domain" placeholder="Auth Domain (예: xxx.firebaseapp.com)">
-            <input id="cloud-project-id" placeholder="Project ID">
-            <input id="cloud-app-id" placeholder="App ID">
             <input id="cloud-email" placeholder="로그인 이메일">
             <input id="cloud-password" type="password" placeholder="비밀번호">
-            <div class="cloud-actions">
-              <button class="small-btn" onclick="saveCloudConfig()">설정 저장</button>
+            <div id="cloud-advanced" class="cloud-advanced">
+              <input id="cloud-api-key" placeholder="Firebase API Key">
+              <input id="cloud-auth-domain" placeholder="Auth Domain (예: xxx.firebaseapp.com)">
+              <input id="cloud-project-id" placeholder="Project ID">
+              <input id="cloud-app-id" placeholder="App ID">
+            </div>
+            <div class="cloud-actions triple">
+              <button class="small-btn" onclick="toggleCloudAdvanced()">고급설정</button>
               <button class="small-btn" onclick="syncCloudNow()">지금 동기화</button>
               <button class="small-btn" onclick="cloudLogin()">로그인</button>
+            </div>
+            <div class="cloud-actions">
+              <button class="small-btn" onclick="saveCloudConfig()">설정 저장</button>
               <button class="small-btn" onclick="cloudRegister()">회원가입</button>
             </div>
             <div id="cloud-status">클라우드 비연결</div>
-            <div class="cloud-note">로그인 상태는 브라우저에 유지됩니다. Firebase Authentication의 Email/Password와 Firestore를 활성화해야 합니다.</div>
+            <div class="cloud-note">프로젝트 설정은 한 번만 저장하면 이후에는 이메일과 비밀번호만 입력하면 됩니다.</div>
           </div>
         </div>
 
@@ -1370,9 +1388,16 @@ const IMG_SIZE_KEY = 'manga_img_scale_v1';
 const FIRST_SINGLE_KEY = 'manga_first_single_v1';
 const READER_MODE_KEY = 'manga_reader_mode_v1';
 const CLOUD_CONFIG_KEY = 'manga_cloud_config_v1';
+const DEFAULT_CLOUD_CONFIG = {
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  appId: ''
+};
 const FILE_PROCESS_CHUNK = 250;
 const LARGE_SELECTION_THRESHOLD = 4000;
 const WEBTOON_UNLOAD_DISTANCE = 2400;
+const ARCHIVE_NEIGHBORHOOD = 1;
 
 let episodes = {};
 let epKeys = [];
@@ -1386,10 +1411,12 @@ let navOn = false;
 let navTimer = null;
 let toastTimer = null;
 let spreadRenderToken = 0;
+let episodeLoadToken = 0;
 
 let objectUrlCache = new Map();
 let activeObjectUrls = new Set();
 let zipArchiveCache = new Map();
+let zipArchives = [];
 let webtoonObserver = null;
 let webtoonSentinelObserver = null;
 let webtoonVisible = [];
@@ -1443,6 +1470,7 @@ syncFirstSingleHUD();
 syncModeButtons();
 hydrateCloudConfigInputs();
 initCloudFromSavedConfig();
+syncCloudAdvancedVisibility();
 
 async function handleFileSelection(e) {
   const fileList = e.target.files;
@@ -1451,6 +1479,7 @@ async function handleFileSelection(e) {
 
   try {
     zipArchiveCache = new Map();
+    zipArchives = [];
     loadingNote.textContent = `선택한 항목 ${totalFiles.toLocaleString()}개 정리 중...`;
 
     await nextFrame();
@@ -1467,7 +1496,11 @@ async function handleFileSelection(e) {
     }
 
     if (zipFiles.length) {
-      mergedEpisodes = mergeEpisodeMaps(mergedEpisodes, await buildEpisodesFromZipFiles(zipFiles, files));
+      const { episodes: zipEpisodes, eagerZipFiles } = buildZipEpisodePlaceholders(zipFiles, files);
+      mergedEpisodes = mergeEpisodeMaps(mergedEpisodes, zipEpisodes);
+      if (eagerZipFiles.length) {
+        mergedEpisodes = mergeEpisodeMaps(mergedEpisodes, await buildEpisodesFromZipFiles(eagerZipFiles, files));
+      }
     }
 
     episodes = mergedEpisodes;
@@ -1525,6 +1558,49 @@ function openFolderPicker() {
 
 function isZipFile(file) {
   return /\.zip$/i.test(file?.name || '');
+}
+
+function parseArchiveEpisodeRange(name) {
+  const match = name.match(/(\d{1,4})\s*[-_~]\s*(\d{1,4})(?=\.zip$)/i);
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!start || !end || start > end) return null;
+  return { start, end };
+}
+
+function buildZipEpisodePlaceholders(zipFiles, collectedFiles) {
+  const map = {};
+  const eagerZipFiles = [];
+  const sorted = [...zipFiles].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+  sorted.forEach((zipFile, index) => {
+    collectedFiles.push(zipFile);
+    const range = parseArchiveEpisodeRange(zipFile.name);
+    if (!range) {
+      eagerZipFiles.push(zipFile);
+      return;
+    }
+
+    const archiveId = `${zipFile.name}::${index}`;
+    const record = {
+      id: archiveId,
+      file: zipFile,
+      name: zipFile.name,
+      startEp: range.start,
+      endEp: range.end,
+      hydrated: false,
+      hydrating: null
+    };
+    zipArchives.push(record);
+
+    for (let ep = range.start; ep <= range.end; ep++) {
+      map[ep] = map[ep] || [];
+    }
+  });
+
+  zipArchives.sort((a, b) => a.startEp - b.startEp || a.endEp - b.endEp);
+  return { episodes: map, eagerZipFiles };
 }
 
 async function buildEpisodesInChunks(fileList, collectedFiles) {
@@ -1602,6 +1678,89 @@ async function buildEpisodesFromZipFiles(zipFiles, collectedFiles) {
   }
 
   return map;
+}
+
+async function ensureEpisodeReady(ep) {
+  const files = episodes[ep];
+  if (files?.length) {
+    void hydrateArchiveNeighborhood(ep);
+    return true;
+  }
+  const record = zipArchives.find(item => ep >= item.startEp && ep <= item.endEp);
+  if (!record) return !!files;
+  await hydrateArchiveNeighborhood(ep);
+  return !!episodes[ep]?.length;
+}
+
+async function hydrateArchiveNeighborhood(ep) {
+  const index = zipArchives.findIndex(item => ep >= item.startEp && ep <= item.endEp);
+  if (index < 0) return;
+
+  const start = Math.max(0, index - ARCHIVE_NEIGHBORHOOD);
+  const end = Math.min(zipArchives.length - 1, index + ARCHIVE_NEIGHBORHOOD);
+  for (let i = start; i <= end; i++) {
+    await hydrateArchiveRecord(zipArchives[i]);
+  }
+  trimHydratedArchives(index);
+}
+
+async function hydrateArchiveRecord(record) {
+  if (!record || record.hydrated) return;
+  if (record.hydrating) {
+    await record.hydrating;
+    return;
+  }
+
+  record.hydrating = (async () => {
+    if (typeof JSZip === 'undefined') {
+      throw new Error('JSZip 라이브러리를 불러오지 못했습니다.');
+    }
+    loadingNote.textContent = `${record.name} 여는 중...`;
+    await yieldToBrowser();
+
+    const archive = await JSZip.loadAsync(record.file);
+    zipArchiveCache.set(record.id, archive);
+
+    Object.values(archive.files)
+      .filter(entry => !entry.dir && /\.(jpe?g|png|gif|webp|avif)$/i.test(entry.name))
+      .forEach(entry => {
+        const item = {
+          kind: 'zip',
+          archiveId: record.id,
+          archiveName: record.name,
+          entryName: entry.name,
+          name: entry.name.split('/').pop(),
+          path: `${record.name}/${entry.name}`
+        };
+        const match = item.name.match(/p(\d+)_\d+\.(jpe?g|png|gif|webp|avif)$/i);
+        if (!match) return;
+        const ep = +match[1];
+        if (ep < record.startEp || ep > record.endEp) return;
+        (episodes[ep] = episodes[ep] || []).push(item);
+      });
+
+    for (let ep = record.startEp; ep <= record.endEp; ep++) {
+      if (!episodes[ep]) continue;
+      episodes[ep].sort((a, b) => getEntryPath(a).localeCompare(getEntryPath(b), undefined, { numeric: true, sensitivity: 'base' }));
+    }
+
+    record.hydrated = true;
+    record.hydrating = null;
+    renderList();
+  })();
+
+  try {
+    await record.hydrating;
+  } finally {
+    record.hydrating = null;
+  }
+}
+
+function trimHydratedArchives(activeIndex) {
+  zipArchives.forEach((record, index) => {
+    if (Math.abs(index - activeIndex) <= ARCHIVE_NEIGHBORHOOD) return;
+    zipArchiveCache.delete(record.id);
+  });
 }
 
 function mergeEpisodeMaps(base, incoming) {
@@ -1686,18 +1845,19 @@ function renderList() {
   document.getElementById('ep-list').innerHTML = epKeys.map(ep => {
     const files = episodes[ep];
     const episodePageCount = files.length;
+    const isPending = !episodePageCount && zipArchives.some(record => ep >= record.startEp && ep <= record.endEp);
     const saved = currentProgress && currentProgress.ep === ep ? currentProgress : null;
-    const percent = saved
+    const percent = saved && episodePageCount
       ? Math.min(100, Math.round(((saved.mode === 'webtoon' ? saved.page : spreadToLastPage(ep, saved.pair || 0)) / episodePageCount) * 100))
       : null;
     return `
       <div class="ep-item ${curEp === ep ? 'active' : ''}" id="ei-${ep}" onclick="loadEp(${ep}, 0)">
         <div class="ep-main">
           <span class="ep-label">${ep}화</span>
-          <span class="ep-sub">${saved ? `${saved.mode === 'webtoon' ? `${saved.page}p` : `${saved.pair + 1}컷`} 이어보기` : '준비됨'}</span>
+          <span class="ep-sub">${saved ? `${saved.mode === 'webtoon' ? `${saved.page}p` : `${saved.pair + 1}컷`} 이어보기` : (isPending ? '근처 화에서 열림' : '준비됨')}</span>
         </div>
         <div class="ep-meta">
-          <span class="ep-pages">${episodePageCount}p</span>
+          <span class="ep-pages">${episodePageCount ? `${episodePageCount}p` : (isPending ? '대기' : '0p')}</span>
           ${percent !== null ? `<span class="ep-prog">${percent}%</span>` : ''}
         </div>
       </div>
@@ -1705,8 +1865,9 @@ function renderList() {
   }).join('');
 }
 
-function loadEp(ep, pair = 0, options = {}) {
+async function loadEp(ep, pair = 0, options = {}) {
   const { preserveMode = false, page = 1, restoreWebtoonPage = false } = options;
+  const token = ++episodeLoadToken;
   releaseEpisodeUrls();
 
   if (!preserveMode) {
@@ -1724,6 +1885,13 @@ function loadEp(ep, pair = 0, options = {}) {
 
   document.getElementById(`ei-${ep}`)?.classList.add('active');
   document.getElementById(`ei-${ep}`)?.scrollIntoView({ block: 'nearest' });
+
+  const ready = await ensureEpisodeReady(ep);
+  if (token !== episodeLoadToken) return;
+  if (!ready) {
+    showToast(`${ep}화 파일을 찾을 수 없어요`);
+    return;
+  }
 
   closeSidebar();
   document.getElementById('end-screen').classList.remove('visible');
@@ -1829,7 +1997,14 @@ function renderWebtoonReader(startEp, options = {}) {
   webtoonLoadingNext = false;
   webtoonStack.innerHTML = '';
 
-  renderWebtoonEpisodeBlock(startEp);
+  void ensureEpisodeReady(startEp).then(ready => {
+    if (!ready || curMode !== 'webtoon' || curEp !== startEp) return;
+    webtoonStack.innerHTML = '';
+    renderWebtoonEpisodeBlock(startEp);
+    if (restoreWebtoonPage) {
+      requestAnimationFrame(() => scrollToWebtoonPage(startEp, page));
+    }
+  });
   observeWebtoonSentinel();
   updateHUD();
   saveCurrentProgress();
@@ -1837,7 +2012,6 @@ function renderWebtoonReader(startEp, options = {}) {
 
   requestAnimationFrame(() => {
     webtoonReader.scrollTop = 0;
-    if (restoreWebtoonPage) scrollToWebtoonPage(startEp, page);
   });
 }
 
@@ -1919,7 +2093,7 @@ function observeWebtoonSentinel() {
   webtoonSentinelObserver.observe(webtoonSentinel);
 }
 
-function maybeAppendNextEpisode() {
+async function maybeAppendNextEpisode() {
   if (webtoonLoadingNext || !document.getElementById('binge').checked) return;
   const lastEp = webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1];
   const idx = epKeys.indexOf(lastEp);
@@ -1929,11 +2103,16 @@ function maybeAppendNextEpisode() {
   if (webtoonAutoloaded.has(nextEp)) return;
 
   webtoonLoadingNext = true;
-  webtoonRenderedEpisodes.push(nextEp);
-  webtoonAutoloaded.add(nextEp);
-  renderWebtoonEpisodeBlock(nextEp);
-  showToast(`${nextEp}화 이어서 로드`);
-  webtoonLoadingNext = false;
+  try {
+    const ready = await ensureEpisodeReady(nextEp);
+    if (!ready) return;
+    webtoonRenderedEpisodes.push(nextEp);
+    webtoonAutoloaded.add(nextEp);
+    renderWebtoonEpisodeBlock(nextEp);
+    showToast(`${nextEp}화 이어서 로드`);
+  } finally {
+    webtoonLoadingNext = false;
+  }
 }
 
 function loadWebtoonFrame(frame) {
@@ -2332,6 +2511,7 @@ function getResumeToast(progress) {
 function resetApp() {
   releaseEpisodeUrls();
   zipArchiveCache = new Map();
+  zipArchives = [];
   disconnectWebtoonObservers();
   curEp = null;
   curPair = 0;
@@ -2362,7 +2542,7 @@ async function ensureObjectUrl(file) {
   const promise = (async () => {
     let url = '';
     if (file?.kind === 'zip') {
-      const archive = zipArchiveCache.get(file.archiveId);
+      const archive = await ensureZipArchiveOpen(file.archiveId);
       const entry = archive?.file(file.entryName);
       if (!entry) throw new Error(`ZIP entry not found: ${file.entryName}`);
       const blob = await entry.async('blob');
@@ -2377,6 +2557,16 @@ async function ensureObjectUrl(file) {
 
   objectUrlCache.set(file, { url: null, promise });
   return promise;
+}
+
+async function ensureZipArchiveOpen(archiveId) {
+  const cached = zipArchiveCache.get(archiveId);
+  if (cached) return cached;
+  const record = zipArchives.find(item => item.id === archiveId);
+  if (!record) return null;
+  const archive = await JSZip.loadAsync(record.file);
+  zipArchiveCache.set(archiveId, archive);
+  return archive;
 }
 
 function releaseObjectUrl(file) {
@@ -2469,15 +2659,16 @@ window.addEventListener('beforeunload', () => {
 });
 
 function saveCloudConfig() {
-  const config = getCloudConfigFromInputs();
+  const config = getCloudConfigFromInputs(true);
   try { localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(config)); } catch (e) {}
   setCloudStatus('클라우드 설정 저장됨');
   initCloudFromSavedConfig(true);
+  syncCloudAdvancedVisibility();
 }
 
 function hydrateCloudConfigInputs() {
   try {
-    const config = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || '{}');
+    const config = getSavedCloudConfig();
     document.getElementById('cloud-api-key').value = config.apiKey || '';
     document.getElementById('cloud-auth-domain').value = config.authDomain || '';
     document.getElementById('cloud-project-id').value = config.projectId || '';
@@ -2487,22 +2678,46 @@ function hydrateCloudConfigInputs() {
   } catch (e) {}
 }
 
-function getCloudConfigFromInputs() {
+function getSavedCloudConfig() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || '{}') || {}; } catch (e) {}
   return {
-    apiKey: document.getElementById('cloud-api-key').value.trim(),
-    authDomain: document.getElementById('cloud-auth-domain').value.trim(),
-    projectId: document.getElementById('cloud-project-id').value.trim(),
-    appId: document.getElementById('cloud-app-id').value.trim(),
+    apiKey: saved.apiKey || DEFAULT_CLOUD_CONFIG.apiKey || '',
+    authDomain: saved.authDomain || DEFAULT_CLOUD_CONFIG.authDomain || '',
+    projectId: saved.projectId || DEFAULT_CLOUD_CONFIG.projectId || '',
+    appId: saved.appId || DEFAULT_CLOUD_CONFIG.appId || '',
+    email: saved.email || '',
+    password: saved.password || ''
+  };
+}
+
+function getCloudConfigFromInputs(includeAdvanced = false) {
+  const base = includeAdvanced ? {} : getSavedCloudConfig();
+  return {
+    apiKey: includeAdvanced ? document.getElementById('cloud-api-key').value.trim() : (base.apiKey || ''),
+    authDomain: includeAdvanced ? document.getElementById('cloud-auth-domain').value.trim() : (base.authDomain || ''),
+    projectId: includeAdvanced ? document.getElementById('cloud-project-id').value.trim() : (base.projectId || ''),
+    appId: includeAdvanced ? document.getElementById('cloud-app-id').value.trim() : (base.appId || ''),
     email: document.getElementById('cloud-email').value.trim(),
     password: document.getElementById('cloud-password').value
   };
 }
 
 function initCloudFromSavedConfig(force = false) {
-  let config = null;
-  try { config = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || 'null'); } catch (e) {}
+  const config = getSavedCloudConfig();
   if (!config?.apiKey || !config?.projectId || !config?.appId || !config?.authDomain) return;
   initCloud(config, force);
+}
+
+function toggleCloudAdvanced() {
+  document.getElementById('cloud-advanced').classList.toggle('open');
+}
+
+function syncCloudAdvancedVisibility() {
+  const panel = document.getElementById('cloud-advanced');
+  const config = getSavedCloudConfig();
+  const hasCloudConfig = !!(config.apiKey && config.authDomain && config.projectId && config.appId);
+  panel.classList.toggle('open', !hasCloudConfig);
 }
 
 function initCloud(config, force = false) {
@@ -2541,7 +2756,12 @@ function initCloud(config, force = false) {
 }
 
 async function cloudLogin() {
-  if (!cloud.initialized) saveCloudConfig();
+  if (!cloud.initialized) initCloudFromSavedConfig(true);
+  if (!cloud.initialized) {
+    setCloudStatus('고급설정에 Firebase 프로젝트 정보를 한 번만 입력하세요');
+    syncCloudAdvancedVisibility();
+    return;
+  }
   if (!cloud.auth) return;
   const { email, password } = getCloudConfigFromInputs();
   if (!email || !password) {
@@ -2559,7 +2779,12 @@ async function cloudLogin() {
 }
 
 async function cloudRegister() {
-  if (!cloud.initialized) saveCloudConfig();
+  if (!cloud.initialized) initCloudFromSavedConfig(true);
+  if (!cloud.initialized) {
+    setCloudStatus('고급설정에 Firebase 프로젝트 정보를 한 번만 입력하세요');
+    syncCloudAdvancedVisibility();
+    return;
+  }
   if (!cloud.auth) return;
   const { email, password } = getCloudConfigFromInputs();
   if (!email || !password) {
