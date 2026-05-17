@@ -172,10 +172,7 @@
   }
 
   #drop-zone input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
+    display: none;
   }
 
   .drop-icon {
@@ -211,6 +208,32 @@
     font-weight: 700;
     pointer-events: none;
     box-shadow: 0 12px 28px rgba(255, 107, 53, 0.25);
+  }
+
+  .drop-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .drop-action {
+    border: none;
+    border-radius: 999px;
+    padding: 11px 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(255, 107, 53, 0.25);
+  }
+
+  .drop-action.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text);
   }
 
   .loading-note {
@@ -1154,14 +1177,19 @@
     <div class="upload-points">
       <div class="upload-chip">웹툰 정주행</div>
       <div class="upload-chip">만화별 진행도 분리</div>
+      <div class="upload-chip">ZIP 묶음 지원</div>
       <div class="upload-chip">클라우드 동기화 가능</div>
     </div>
     <div id="drop-zone">
-      <input type="file" id="file-input" multiple accept="image/*" webkitdirectory>
+      <input type="file" id="archive-input" multiple accept=".zip,application/zip,image/*">
+      <input type="file" id="folder-input" multiple accept="image/*" webkitdirectory>
       <div class="drop-icon">📚</div>
-      <div class="drop-text">이미지 폴더 선택</div>
-      <div class="drop-sub">`p001_001.jpg` 형식 파일을 읽습니다.<br>폴더를 선택하면 만화 단위로 회차를 자동 정리합니다.</div>
-      <button class="drop-btn">폴더 열기</button>
+      <div class="drop-text">ZIP 또는 이미지 폴더 선택</div>
+      <div class="drop-sub">`p001_001.jpg` 형식 파일을 읽습니다.<br>추천: `001-020.zip` 같은 묶음 ZIP 여러 개를 한 번에 선택하세요.</div>
+      <div class="drop-actions">
+        <button class="drop-action" type="button" onclick="openArchivePicker()">ZIP / 파일 열기</button>
+        <button class="drop-action secondary" type="button" onclick="openFolderPicker()">폴더 열기</button>
+      </div>
     </div>
     <div class="loading-note" id="loading-note"></div>
   </div>
@@ -1335,6 +1363,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 const PROGRESS_STORE_KEY = 'manga_progress_v2';
 const IMG_SIZE_KEY = 'manga_img_scale_v1';
@@ -1356,9 +1385,11 @@ let currentMangaTitle = '';
 let navOn = false;
 let navTimer = null;
 let toastTimer = null;
+let spreadRenderToken = 0;
 
 let objectUrlCache = new Map();
 let activeObjectUrls = new Set();
+let zipArchiveCache = new Map();
 let webtoonObserver = null;
 let webtoonSentinelObserver = null;
 let webtoonVisible = [];
@@ -1385,6 +1416,8 @@ const webtoonReader = document.getElementById('webtoon-reader');
 const webtoonStack = document.getElementById('webtoon-stack');
 const webtoonSentinel = document.getElementById('webtoon-sentinel');
 const spreadReader = document.getElementById('spread-reader');
+const archiveInput = document.getElementById('archive-input');
+const folderInput = document.getElementById('folder-input');
 
 imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
 firstSingleInput.addEventListener('change', () => {
@@ -1399,7 +1432,8 @@ firstSingleInput.addEventListener('change', () => {
 fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
 webtoonReader.addEventListener('scroll', handleWebtoonScroll, { passive: true });
 document.addEventListener('fullscreenchange', syncFullscreenToggle);
-document.getElementById('file-input').addEventListener('change', handleFileSelection);
+archiveInput.addEventListener('change', handleFileSelection);
+folderInput.addEventListener('change', handleFileSelection);
 
 initImageScale();
 initFirstSingle();
@@ -1415,47 +1449,82 @@ async function handleFileSelection(e) {
   const totalFiles = fileList?.length || 0;
   if (!totalFiles) return;
 
-  loadingNote.textContent = `파일 ${totalFiles.toLocaleString()}개 정리 중...`;
+  try {
+    zipArchiveCache = new Map();
+    loadingNote.textContent = `선택한 항목 ${totalFiles.toLocaleString()}개 정리 중...`;
 
-  await nextFrame();
+    await nextFrame();
 
-  const files = [];
-  episodes = await buildEpisodesInChunks(fileList, files);
-  epKeys = Object.keys(episodes).map(Number).sort((a, b) => a - b);
+    const files = [];
+    const selected = Array.from(fileList);
+    const zipFiles = selected.filter(isZipFile);
+    const imageFiles = selected.filter(file => !isZipFile(file));
 
-  if (!epKeys.length) {
-    alert('p001_001.jpg 형식 파일을 찾을 수 없어요.');
-    loadingNote.textContent = '';
-    return;
-  }
+    let mergedEpisodes = {};
 
-  currentMangaId = buildMangaId(files, epKeys);
-  currentMangaTitle = extractMangaTitle(files);
-  if (files.length >= LARGE_SELECTION_THRESHOLD) {
-    document.getElementById('binge').checked = false;
-  }
-
-  document.getElementById('upload-screen').style.display = 'none';
-  document.getElementById('viewer-app').style.display = 'block';
-  document.getElementById('total-label').textContent = `${currentMangaTitle} · 총 ${epKeys.length}화`;
-  document.getElementById('manga-id-label').textContent = currentMangaTitle;
-
-  renderList();
-  loadingNote.textContent = '';
-
-  const saved = getCurrentProgress();
-  if (saved && episodes[saved.ep]) {
-    curMode = saved.mode || curMode;
-    syncModeButtons();
-    if (curMode === 'webtoon') {
-      loadEp(saved.ep, 0, { preserveMode: true, page: saved.page || 1, restoreWebtoonPage: true });
-    } else {
-      loadEp(saved.ep, saved.pair || 0, { preserveMode: true });
+    if (imageFiles.length) {
+      mergedEpisodes = mergeEpisodeMaps(mergedEpisodes, await buildEpisodesInChunks(imageFiles, files));
     }
-    showToast(getResumeToast(saved));
-  } else {
-    loadEp(epKeys[0], 0, { preserveMode: true });
+
+    if (zipFiles.length) {
+      mergedEpisodes = mergeEpisodeMaps(mergedEpisodes, await buildEpisodesFromZipFiles(zipFiles, files));
+    }
+
+    episodes = mergedEpisodes;
+    epKeys = Object.keys(episodes).map(Number).sort((a, b) => a - b);
+
+    if (!epKeys.length) {
+      alert('p001_001.jpg 형식 파일을 찾을 수 없어요.');
+      loadingNote.textContent = '';
+      return;
+    }
+
+    currentMangaId = buildMangaId(files, epKeys);
+    currentMangaTitle = extractMangaTitle(files);
+    if (files.length >= LARGE_SELECTION_THRESHOLD) {
+      document.getElementById('binge').checked = false;
+    }
+
+    document.getElementById('upload-screen').style.display = 'none';
+    document.getElementById('viewer-app').style.display = 'block';
+    document.getElementById('total-label').textContent = `${currentMangaTitle} · 총 ${epKeys.length}화`;
+    document.getElementById('manga-id-label').textContent = currentMangaTitle;
+
+    renderList();
+    loadingNote.textContent = '';
+
+    const saved = getCurrentProgress();
+    if (saved && episodes[saved.ep]) {
+      curMode = saved.mode || curMode;
+      syncModeButtons();
+      if (curMode === 'webtoon') {
+        loadEp(saved.ep, 0, { preserveMode: true, page: saved.page || 1, restoreWebtoonPage: true });
+      } else {
+        loadEp(saved.ep, saved.pair || 0, { preserveMode: true });
+      }
+      showToast(getResumeToast(saved));
+    } else {
+      loadEp(epKeys[0], 0, { preserveMode: true });
+    }
+  } catch (error) {
+    console.error(error);
+    loadingNote.textContent = '';
+    alert('파일을 여는 중 문제가 생겼어요. ZIP 파일이 손상되었거나 외부 스크립트를 불러오지 못했을 수 있어요.');
+  } finally {
+    e.target.value = '';
   }
+}
+
+function openArchivePicker() {
+  archiveInput.click();
+}
+
+function openFolderPicker() {
+  folderInput.click();
+}
+
+function isZipFile(file) {
+  return /\.zip$/i.test(file?.name || '');
 }
 
 async function buildEpisodesInChunks(fileList, collectedFiles) {
@@ -1493,12 +1562,63 @@ async function buildEpisodesInChunks(fileList, collectedFiles) {
   return map;
 }
 
+async function buildEpisodesFromZipFiles(zipFiles, collectedFiles) {
+  const map = {};
+  if (!zipFiles.length) return map;
+  if (typeof JSZip === 'undefined') {
+    throw new Error('JSZip 라이브러리를 불러오지 못했습니다.');
+  }
+
+  for (let index = 0; index < zipFiles.length; index++) {
+    const zipFile = zipFiles[index];
+    loadingNote.textContent = `ZIP ${index + 1} / ${zipFiles.length} 분석 중... ${zipFile.name}`;
+    await yieldToBrowser();
+
+    const archive = await JSZip.loadAsync(zipFile);
+    const archiveId = `${zipFile.name}::${index}`;
+    zipArchiveCache.set(archiveId, archive);
+
+    Object.values(archive.files)
+      .filter(entry => !entry.dir && /\.(jpe?g|png|gif|webp|avif)$/i.test(entry.name))
+      .forEach(entry => {
+        const item = {
+          kind: 'zip',
+          archiveId,
+          archiveName: zipFile.name,
+          entryName: entry.name,
+          name: entry.name.split('/').pop(),
+          path: `${zipFile.name}/${entry.name}`
+        };
+        collectedFiles.push(item);
+        const match = item.name.match(/p(\d+)_\d+\.(jpe?g|png|gif|webp|avif)$/i);
+        if (!match) return;
+        const ep = +match[1];
+        (map[ep] = map[ep] || []).push(item);
+      });
+  }
+
+  for (const arr of Object.values(map)) {
+    arr.sort((a, b) => getEntryPath(a).localeCompare(getEntryPath(b), undefined, { numeric: true, sensitivity: 'base' }));
+  }
+
+  return map;
+}
+
+function mergeEpisodeMaps(base, incoming) {
+  const merged = { ...base };
+  for (const [ep, items] of Object.entries(incoming)) {
+    merged[ep] = (merged[ep] || []).concat(items);
+    merged[ep].sort((a, b) => getEntryPath(a).localeCompare(getEntryPath(b), undefined, { numeric: true, sensitivity: 'base' }));
+  }
+  return merged;
+}
+
 function buildEpisodes(files) {
   const map = {};
   const pat = /p(\d+)_\d+\.(jpe?g|png|gif|webp|avif)$/i;
 
   for (const file of files) {
-    const match = file.name.match(pat);
+    const match = getEntryName(file).match(pat);
     if (!match) continue;
     const ep = +match[1];
     (map[ep] = map[ep] || []).push(file);
@@ -1506,8 +1626,8 @@ function buildEpisodes(files) {
 
   for (const arr of Object.values(map)) {
     arr.sort((a, b) => {
-      const pathA = a.webkitRelativePath || a.name;
-      const pathB = b.webkitRelativePath || b.name;
+      const pathA = getEntryPath(a);
+      const pathB = getEntryPath(b);
       return pathA.localeCompare(pathB, undefined, { numeric: true, sensitivity: 'base' });
     });
   }
@@ -1517,17 +1637,37 @@ function buildEpisodes(files) {
 
 function buildMangaId(files, episodeKeys) {
   const root = extractMangaTitle(files);
-  const first = files[0]?.webkitRelativePath || files[0]?.name || '';
-  const last = files[files.length - 1]?.webkitRelativePath || files[files.length - 1]?.name || '';
+  const first = getEntryPath(files[0]);
+  const last = getEntryPath(files[files.length - 1]);
   const signature = [root, files.length, episodeKeys.length, first, last].join('|');
   return 'manga_' + hashString(signature);
 }
 
 function extractMangaTitle(files) {
-  const sample = files.find(file => file.webkitRelativePath) || files[0];
+  const sample = files.find(file => getEntryPath(file)) || files[0];
   if (!sample) return 'Untitled';
-  const path = sample.webkitRelativePath || sample.name;
-  return path.split('/')[0] || 'Untitled';
+  if (sample.kind === 'zip') {
+    return (sample.archiveName || 'Untitled')
+      .replace(/\.zip$/i, '')
+      .replace(/[_\s-]*\d{1,4}\s*[-_~]\s*\d{1,4}$/i, '')
+      .replace(/[_\s-]*part\s*\d+$/i, '')
+      || 'Untitled';
+  }
+  const path = getEntryPath(sample);
+  if (path.includes('/')) return path.split('/')[0] || 'Untitled';
+  return path
+    .replace(/\.zip$/i, '')
+    .replace(/[_\s-]*\d{1,4}\s*[-_~]\s*\d{1,4}$/i, '')
+    .replace(/[_\s-]*part\s*\d+$/i, '')
+    || 'Untitled';
+}
+
+function getEntryName(file) {
+  return file?.name || file?.entryName?.split('/').pop() || '';
+}
+
+function getEntryPath(file) {
+  return file?.webkitRelativePath || file?.path || file?.entryName || file?.name || '';
 }
 
 function hashString(input) {
@@ -1633,6 +1773,7 @@ function syncModeButtons() {
 
 function drawSpread() {
   if (!curEp) return;
+  const token = ++spreadRenderToken;
   const files = episodes[curEp];
   const spreads = getSpreads(files);
 
@@ -1652,11 +1793,11 @@ function drawSpread() {
   imgR.classList.remove('ready');
   imgL.classList.remove('ready');
 
-  if (rightFile) setImageSource(imgR, rightFile);
+  if (rightFile) setImageSource(imgR, rightFile, token);
   else imgR.removeAttribute('src');
 
   if (leftFile) {
-    setImageSource(imgL, leftFile);
+    setImageSource(imgL, leftFile, token);
     spreadEl.classList.remove('single');
   } else {
     imgL.removeAttribute('src');
@@ -1799,9 +1940,18 @@ function loadWebtoonFrame(frame) {
   if (!frame || frame.classList.contains('loaded')) return;
   const img = frame.querySelector('img');
   const file = img?._file;
-  if (!img || !file) return;
-  img.onload = () => frame.classList.add('loaded');
-  img.src = ensureObjectUrl(file);
+  if (!img || !file || frame.dataset.loading === '1') return;
+  frame.dataset.loading = '1';
+  ensureObjectUrl(file).then(url => {
+    if (!frame.isConnected) return;
+    img.onload = () => {
+      frame.classList.add('loaded');
+      frame.dataset.loading = '0';
+    };
+    img.src = url;
+  }).catch(() => {
+    frame.dataset.loading = '0';
+  });
 }
 
 function webtoonVisibleState(frame, entering) {
@@ -2181,6 +2331,7 @@ function getResumeToast(progress) {
 
 function resetApp() {
   releaseEpisodeUrls();
+  zipArchiveCache = new Map();
   disconnectWebtoonObservers();
   curEp = null;
   curPair = 0;
@@ -2192,32 +2343,58 @@ function resetApp() {
   webtoonStack.innerHTML = '';
   document.getElementById('viewer-app').style.display = 'none';
   document.getElementById('upload-screen').style.display = 'flex';
-  document.getElementById('file-input').value = '';
+  archiveInput.value = '';
+  folderInput.value = '';
 }
 
-function ensureObjectUrl(file) {
-  let url = objectUrlCache.get(file);
-  if (!url) {
-    url = URL.createObjectURL(file);
-    objectUrlCache.set(file, url);
+async function ensureObjectUrl(file) {
+  const cached = objectUrlCache.get(file);
+  if (cached?.url) {
+    activeObjectUrls.add(cached.url);
+    return cached.url;
   }
-  activeObjectUrls.add(url);
-  return url;
+  if (cached?.promise) {
+    const url = await cached.promise;
+    activeObjectUrls.add(url);
+    return url;
+  }
+
+  const promise = (async () => {
+    let url = '';
+    if (file?.kind === 'zip') {
+      const archive = zipArchiveCache.get(file.archiveId);
+      const entry = archive?.file(file.entryName);
+      if (!entry) throw new Error(`ZIP entry not found: ${file.entryName}`);
+      const blob = await entry.async('blob');
+      url = URL.createObjectURL(blob);
+    } else {
+      url = URL.createObjectURL(file);
+    }
+    activeObjectUrls.add(url);
+    objectUrlCache.set(file, { url, promise: null });
+    return url;
+  })();
+
+  objectUrlCache.set(file, { url: null, promise });
+  return promise;
 }
 
 function releaseObjectUrl(file) {
   if (!file) return;
-  const url = objectUrlCache.get(file);
+  const cached = objectUrlCache.get(file);
+  const url = cached?.url;
   if (!url) return;
   URL.revokeObjectURL(url);
   activeObjectUrls.delete(url);
   objectUrlCache.delete(file);
 }
 
-function setImageSource(img, file) {
-  const url = ensureObjectUrl(file);
-  img.onload = () => img.classList.add('ready');
-  img.src = url;
+function setImageSource(img, file, token = spreadRenderToken) {
+  ensureObjectUrl(file).then(url => {
+    if (token !== spreadRenderToken) return;
+    img.onload = () => img.classList.add('ready');
+    img.src = url;
+  }).catch(() => {});
 }
 
 function maybeUnloadWebtoonFrame(frame) {
@@ -2234,6 +2411,7 @@ function unloadWebtoonFrame(frame) {
   img.onload = null;
   img.removeAttribute('src');
   frame.classList.remove('loaded');
+  frame.dataset.loading = '0';
   releaseObjectUrl(file);
 }
 
