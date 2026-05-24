@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>만화 뷰어</title>
+<meta name="theme-color" content="#f6f3ef">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Manga Viewer">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
@@ -123,10 +131,54 @@
   }
 
   .upload-sub {
-    margin-top: 10px;
+    margin-top: 12px;
     color: var(--text-2);
-    font-size: 14px;
-    line-height: 1.7;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .entry-mode-row {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .entry-mode-btn {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 20px;
+    padding: 18px 16px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  }
+
+  .entry-mode-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 107, 53, 0.42);
+    background: rgba(255, 107, 53, 0.08);
+  }
+
+  .entry-mode-btn.active {
+    border-color: rgba(255, 107, 53, 0.58);
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.18), rgba(255, 154, 85, 0.08));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .entry-mode-name {
+    display: block;
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .entry-mode-desc {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-3);
+    font-size: 11px;
+    line-height: 1.5;
   }
 
   .upload-points {
@@ -163,7 +215,12 @@
     transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
   }
 
-  #drop-zone:hover {
+  #drop-zone.disabled {
+    cursor: default;
+    opacity: 0.58;
+  }
+
+  #drop-zone:hover:not(.disabled) {
     transform: translateY(-2px);
     border-color: rgba(255, 107, 53, 0.55);
     background:
@@ -959,6 +1016,76 @@
     padding: 90px 0 120px;
   }
 
+  body.app-mode-webtoon {
+    background: #000;
+  }
+
+  body.app-mode-webtoon #reader,
+  body.app-mode-webtoon #webtoon-reader {
+    background: #000;
+  }
+
+  body.app-mode-webtoon #hud {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    padding: 10px 14px;
+  }
+
+  body.app-mode-webtoon #hud-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  body.app-mode-webtoon #hud-page {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.46);
+  }
+
+  body.app-mode-webtoon #hud-mode,
+  body.app-mode-webtoon #hud-first-single,
+  body.app-mode-webtoon #fullscreen-toggle,
+  body.app-mode-webtoon #img-size,
+  body.app-mode-webtoon #img-size-label,
+  body.app-mode-webtoon .size-head,
+  body.app-mode-webtoon .reader-mode-section,
+  body.app-mode-webtoon .spread-only,
+  body.app-mode-webtoon .cloud-note,
+  body.app-mode-webtoon .toggle-copy span,
+  body.app-mode-webtoon .episodes-head span,
+  body.app-mode-webtoon .sb-head p,
+  body.app-mode-webtoon .section-title {
+    display: none !important;
+  }
+
+  body.app-mode-webtoon .sb-head {
+    padding-bottom: 14px;
+  }
+
+  body.app-mode-webtoon .sidebar-tab,
+  body.app-mode-webtoon .ghost-btn,
+  body.app-mode-webtoon .small-btn,
+  body.app-mode-webtoon .pill-btn {
+    font-size: 11px;
+  }
+
+  body.app-mode-webtoon .webtoon-stack {
+    width: min(100%, 1080px);
+    padding: 58px 0 0;
+  }
+
+  body.app-mode-webtoon .episode-block {
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    animation: none;
+  }
+
+  body.app-mode-webtoon .episode-head {
+    display: none;
+  }
+
   .episode-block {
     margin: 0 auto 24px;
     padding: 18px;
@@ -995,6 +1122,10 @@
     gap: 10px;
   }
 
+  body.app-mode-webtoon .webtoon-images {
+    gap: 0;
+  }
+
   .webtoon-frame {
     position: relative;
     min-height: 220px;
@@ -1004,6 +1135,14 @@
       linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
       #111;
     border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  body.app-mode-webtoon .webtoon-frame {
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
   }
 
   .webtoon-frame::before {
@@ -1029,6 +1168,11 @@
     height: auto;
     opacity: 0;
     transition: opacity 0.28s ease;
+  }
+
+  body.app-mode-webtoon .webtoon-frame img {
+    width: 100%;
+    max-width: 100%;
   }
 
   .webtoon-frame.loaded img {
@@ -1265,6 +1409,10 @@
       border-radius: 24px;
     }
 
+    .entry-mode-row {
+      grid-template-columns: 1fr;
+    }
+
     .episode-block {
       border-radius: 20px;
       padding: 14px;
@@ -1298,19 +1446,28 @@
   <button class="upload-menu-btn" type="button" onclick="openLibraryOverlay()">보관함</button>
   <div class="upload-shell">
     <div class="upload-title">MANGA<span>.</span>VIEWER</div>
-    <div class="upload-sub">웹툰 스크롤 모드와 양면 리더 모드를 모두 지원합니다. 대용량 폴더도 지연 로딩으로 더 빠르게 열고, 만화별 진행도는 분리 저장됩니다.</div>
-    <div class="upload-points">
-      <div class="upload-chip">웹툰 정주행</div>
-      <div class="upload-chip">만화별 진행도 분리</div>
-      <div class="upload-chip">ZIP 묶음 지원</div>
-      <div class="upload-chip">클라우드 동기화 가능</div>
+    <div class="upload-sub">먼저 읽는 방식을 고른 뒤 ZIP이나 폴더를 엽니다.</div>
+    <div class="entry-mode-row">
+      <button class="entry-mode-btn" id="entry-mode-manga" type="button" onclick="selectAppMode('manga')">
+        <span class="entry-mode-name">만화 모드</span>
+        <span class="entry-mode-desc">현재 뷰어 기능 그대로</span>
+      </button>
+      <button class="entry-mode-btn" id="entry-mode-webtoon" type="button" onclick="selectAppMode('webtoon')">
+        <span class="entry-mode-name">웹툰 모드</span>
+        <span class="entry-mode-desc">스크롤 전용, 간격 없이 표시</span>
+      </button>
     </div>
-    <div id="drop-zone">
+    <div class="upload-points">
+      <div class="upload-chip">ZIP 지원</div>
+      <div class="upload-chip">진행도 분리 저장</div>
+      <div class="upload-chip">클라우드 동기화</div>
+    </div>
+    <div id="drop-zone" class="disabled">
       <input type="file" id="archive-input" multiple accept=".zip,application/zip,image/*">
       <input type="file" id="folder-input" multiple accept="image/*" webkitdirectory>
       <div class="drop-icon">📚</div>
-      <div class="drop-text">ZIP 또는 이미지 폴더 선택</div>
-      <div class="drop-sub">`p001_001.jpg` 형식 파일을 읽습니다.<br>추천: `001-020.zip` 같은 묶음 ZIP 여러 개를 한 번에 선택하세요.</div>
+      <div class="drop-text">파일 선택</div>
+      <div class="drop-sub">`p001_001.jpg` 형식 지원</div>
       <div class="drop-actions">
         <button class="drop-action" type="button" onclick="openArchivePicker()">ZIP / 파일 열기</button>
         <button class="drop-action secondary" type="button" onclick="openFolderPicker()">폴더 열기</button>
@@ -1359,7 +1516,7 @@
 
       <div class="sidebar-pages">
         <div class="sidebar-page settings-page active" id="sidebar-page-settings">
-          <div class="section-box">
+          <div class="section-box reader-mode-section">
             <div class="section-title">Reader</div>
             <div class="inline-row">
               <button class="pill-btn active" id="mode-spread-btn" onclick="setReaderMode('spread')">책처럼</button>
@@ -1385,16 +1542,16 @@
               </label>
             </div>
             <div class="toggle-row" style="margin-top:10px">
-              <div class="toggle-copy">
+              <div class="toggle-copy spread-only">
                 <strong>첫 페이지 단독</strong>
                 <span>책 모드에서 표지처럼 1페이지만 먼저 표시</span>
               </div>
-              <label class="toggle-switch">
+              <label class="toggle-switch spread-only">
                 <input type="checkbox" id="first-single">
                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
               </label>
             </div>
-            <div class="toggle-row" style="margin-top:10px">
+            <div class="toggle-row spread-only" style="margin-top:10px">
               <div class="toggle-copy">
                 <strong>전체 화면</strong>
                 <span>영상처럼 몰입해서 보기</span>
@@ -1404,11 +1561,11 @@
                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
               </label>
             </div>
-            <div class="size-head" style="margin-top:14px">
+            <div class="size-head spread-only" style="margin-top:14px">
               <span>책 모드 이미지 크기</span>
               <strong id="img-size-label">100%</strong>
             </div>
-            <input type="range" id="img-size" min="70" max="130" step="5" value="100">
+            <input class="spread-only" type="range" id="img-size" min="70" max="130" step="5" value="100">
           </div>
 
           <div class="section-box cloud-box">
@@ -1508,6 +1665,10 @@ const FIRST_SINGLE_KEY = 'manga_first_single_v1';
 const READER_MODE_KEY = 'manga_reader_mode_v1';
 const CLOUD_CONFIG_KEY = 'manga_cloud_config_v1';
 const DEVICE_ID_KEY = 'manga_device_id_v1';
+const APP_MODE_COPY = {
+  manga: '만화 모드',
+  webtoon: '웹툰 모드'
+};
 const DEFAULT_CLOUD_CONFIG = {
   apiKey: '',
   authDomain: '',
@@ -1525,6 +1686,7 @@ let curEp = null;
 let curPair = 0;
 let curPage = 1;
 let curMode = 'spread';
+let appMode = null;
 let currentMangaId = null;
 let currentMangaTitle = '';
 let navOn = false;
@@ -1568,6 +1730,7 @@ const webtoonSentinel = document.getElementById('webtoon-sentinel');
 const spreadReader = document.getElementById('spread-reader');
 const archiveInput = document.getElementById('archive-input');
 const folderInput = document.getElementById('folder-input');
+const dropZone = document.getElementById('drop-zone');
 
 imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
 firstSingleInput.addEventListener('change', () => {
@@ -1595,6 +1758,27 @@ hydrateCloudConfigInputs();
 initCloudFromSavedConfig();
 syncCloudAdvancedVisibility();
 renderLibraryDashboard();
+syncAppModeUI();
+
+function selectAppMode(mode) {
+  if (mode !== 'manga' && mode !== 'webtoon') return;
+  appMode = mode;
+  loadingNote.textContent = `${APP_MODE_COPY[mode]} 선택됨`;
+  syncAppModeUI();
+}
+
+function syncAppModeUI() {
+  document.body.classList.toggle('app-mode-webtoon', appMode === 'webtoon');
+  dropZone.classList.toggle('disabled', !appMode);
+  document.getElementById('entry-mode-manga').classList.toggle('active', appMode === 'manga');
+  document.getElementById('entry-mode-webtoon').classList.toggle('active', appMode === 'webtoon');
+}
+
+function ensureAppModeSelected() {
+  if (appMode) return true;
+  loadingNote.textContent = '먼저 모드를 선택하세요.';
+  return false;
+}
 
 async function handleFileSelection(e) {
   const fileList = e.target.files;
@@ -1638,6 +1822,7 @@ async function handleFileSelection(e) {
 
     currentMangaId = buildMangaId(files, epKeys);
     currentMangaTitle = extractMangaTitle(files);
+    curMode = appMode === 'webtoon' ? 'webtoon' : curMode;
     if (files.length >= LARGE_SELECTION_THRESHOLD) {
       document.getElementById('binge').checked = false;
     }
@@ -1652,12 +1837,15 @@ async function handleFileSelection(e) {
 
     const saved = getCurrentProgress();
     if (saved && episodes[saved.ep]) {
-      curMode = saved.mode || curMode;
+      const resumePage = saved.page || spreadToLastPage(saved.ep, saved.pair || 0);
+      if (appMode !== 'webtoon') {
+        curMode = saved.mode || curMode;
+      }
       syncModeButtons();
       if (curMode === 'webtoon') {
-        loadEp(saved.ep, 0, { preserveMode: true, page: saved.page || 1, restoreWebtoonPage: true });
+        loadEp(saved.ep, 0, { preserveMode: true, page: resumePage, restoreWebtoonPage: true });
       } else {
-        loadEp(saved.ep, saved.pair || 0, { preserveMode: true });
+        loadEp(saved.ep, saved.pair ?? pageToPair(saved.ep, resumePage), { preserveMode: true });
       }
       showToast(getResumeToast(saved));
     } else {
@@ -1673,10 +1861,12 @@ async function handleFileSelection(e) {
 }
 
 function openArchivePicker() {
+  if (!ensureAppModeSelected()) return;
   archiveInput.click();
 }
 
 function openFolderPicker() {
+  if (!ensureAppModeSelected()) return;
   folderInput.click();
 }
 
@@ -1991,7 +2181,9 @@ async function loadEp(ep, pair = 0, options = {}) {
   const token = ++episodeLoadToken;
   releaseEpisodeUrls();
 
-  if (!preserveMode) {
+  if (appMode === 'webtoon') {
+    curMode = 'webtoon';
+  } else if (!preserveMode) {
     const saved = getCurrentProgress();
     if (saved?.mode) curMode = saved.mode;
   }
@@ -2025,6 +2217,11 @@ async function loadEp(ep, pair = 0, options = {}) {
 }
 
 function setReaderMode(mode) {
+  if (appMode === 'webtoon') {
+    curMode = 'webtoon';
+    syncModeButtons();
+    return;
+  }
   if (curMode === mode) return;
   curMode = mode;
   try { localStorage.setItem(READER_MODE_KEY, curMode); } catch (e) {}
@@ -2041,6 +2238,7 @@ function setReaderMode(mode) {
 }
 
 function toggleReaderMode() {
+  if (appMode === 'webtoon') return;
   setReaderMode(curMode === 'spread' ? 'webtoon' : 'spread');
 }
 
@@ -2048,7 +2246,8 @@ function syncModeButtons() {
   document.getElementById('mode-spread-btn').classList.toggle('active', curMode === 'spread');
   document.getElementById('mode-webtoon-btn').classList.toggle('active', curMode === 'webtoon');
   document.getElementById('hud-mode').classList.toggle('active', curMode === 'webtoon');
-  document.getElementById('hud-first-single').style.display = curMode === 'spread' ? 'grid' : 'none';
+  document.getElementById('hud-mode').style.display = appMode === 'webtoon' ? 'none' : 'grid';
+  document.getElementById('hud-first-single').style.display = curMode === 'spread' && appMode !== 'webtoon' ? 'grid' : 'none';
   spreadReader.style.display = curMode === 'spread' ? 'flex' : 'none';
   webtoonReader.style.display = curMode === 'webtoon' ? 'block' : 'none';
   document.getElementById('hud').classList.toggle('visible', curMode === 'webtoon' || navOn);
@@ -2142,13 +2341,15 @@ function renderWebtoonEpisodeBlock(ep) {
   const block = document.createElement('section');
   block.className = 'episode-block';
   block.dataset.ep = String(ep);
-  block.innerHTML = `
-    <div class="episode-head">
-      <div class="episode-title">${ep}화</div>
-      <div class="episode-meta">${files.length} pages</div>
-    </div>
-    <div class="webtoon-images"></div>
-  `;
+  block.innerHTML = appMode === 'webtoon'
+    ? '<div class="webtoon-images"></div>'
+    : `
+      <div class="episode-head">
+        <div class="episode-title">${ep}화</div>
+        <div class="episode-meta">${files.length} pages</div>
+      </div>
+      <div class="webtoon-images"></div>
+    `;
 
   const imagesWrap = block.querySelector('.webtoon-images');
   const batchSize = 12;
@@ -2431,7 +2632,9 @@ function hideNav() {
 function updateHUD() {
   if (!curEp) return;
   const total = episodes[curEp]?.length || 0;
-  document.getElementById('hud-title').textContent = `${currentMangaTitle} · ${curEp}화`;
+  document.getElementById('hud-title').textContent = appMode === 'webtoon'
+    ? `${curEp}화`
+    : `${currentMangaTitle} · ${curEp}화`;
 
   if (curMode === 'webtoon') {
     document.getElementById('hud-page').textContent = `${curPage} / ${total}p`;
@@ -2565,7 +2768,7 @@ function setSidebarTab(tab) {
 }
 
 function openSidebar() {
-  setSidebarTab('settings');
+  setSidebarTab(appMode === 'webtoon' ? 'episodes' : 'settings');
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sb-overlay').classList.add('open');
 }
@@ -2678,11 +2881,14 @@ function resetApp() {
   epKeys = [];
   currentMangaId = null;
   currentMangaTitle = '';
+  appMode = null;
   webtoonStack.innerHTML = '';
   document.getElementById('viewer-app').style.display = 'none';
   document.getElementById('upload-screen').style.display = 'flex';
   archiveInput.value = '';
   folderInput.value = '';
+  loadingNote.textContent = '';
+  syncAppModeUI();
 }
 
 async function ensureObjectUrl(file) {
