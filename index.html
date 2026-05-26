@@ -4,14 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>만화 뷰어</title>
-<meta name="theme-color" content="#f6f3ef">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Manga Viewer">
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
-<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
@@ -1678,6 +1670,8 @@ const DEFAULT_CLOUD_CONFIG = {
 const FILE_PROCESS_CHUNK = 250;
 const LARGE_SELECTION_THRESHOLD = 4000;
 const WEBTOON_UNLOAD_DISTANCE = 2400;
+const WEBTOON_EPISODE_KEEP_BEHIND = 1;
+const WEBTOON_EPISODE_KEEP_AHEAD = 1;
 const ARCHIVE_NEIGHBORHOOD = 1;
 
 let episodes = {};
@@ -1697,6 +1691,8 @@ let episodeLoadToken = 0;
 
 let objectUrlCache = new Map();
 let activeObjectUrls = new Set();
+let imageMetaCache = new Map();
+let episodeSpreadCache = new Map();
 let zipArchiveCache = new Map();
 let zipArchives = [];
 let webtoonObserver = null;
@@ -1736,10 +1732,14 @@ imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
 firstSingleInput.addEventListener('change', () => {
   saveFirstSingle(firstSingleInput.checked);
   syncFirstSingleHUD();
+  episodeSpreadCache = new Map();
   if (curMode === 'spread' && curEp) {
-    const spreads = getSpreads(episodes[curEp]);
-    if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
-    drawSpread();
+    void ensureEpisodeSpreadLayout(curEp).then(() => {
+      const spreads = getSpreads(episodes[curEp], curEp);
+      curPair = pageToPair(curEp, curPage);
+      if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
+      drawSpread();
+    });
   }
 });
 fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
@@ -1786,7 +1786,10 @@ async function handleFileSelection(e) {
   if (!totalFiles) return;
 
   try {
+    releaseEpisodeUrls();
     zipArchiveCache = new Map();
+    imageMetaCache = new Map();
+    episodeSpreadCache = new Map();
     zipArchives = [];
     loadingNote.textContent = `선택한 항목 ${totalFiles.toLocaleString()}개 정리 중...`;
 
@@ -1845,7 +1848,7 @@ async function handleFileSelection(e) {
       if (curMode === 'webtoon') {
         loadEp(saved.ep, 0, { preserveMode: true, page: resumePage, restoreWebtoonPage: true });
       } else {
-        loadEp(saved.ep, saved.pair ?? pageToPair(saved.ep, resumePage), { preserveMode: true });
+        loadEp(saved.ep, 0, { preserveMode: true, page: resumePage });
       }
       showToast(getResumeToast(saved));
     } else {
@@ -2073,8 +2076,37 @@ async function hydrateArchiveRecord(record) {
 function trimHydratedArchives(activeIndex) {
   zipArchives.forEach((record, index) => {
     if (Math.abs(index - activeIndex) <= ARCHIVE_NEIGHBORHOOD) return;
-    zipArchiveCache.delete(record.id);
+    dehydrateArchiveRecord(record);
   });
+}
+
+function dehydrateArchiveRecord(record) {
+  if (!record) return;
+  zipArchiveCache.delete(record.id);
+  if (!record.hydrated) return;
+
+  for (let ep = record.startEp; ep <= record.endEp; ep++) {
+    const items = episodes[ep];
+    if (!items?.length) {
+      episodeSpreadCache.delete(ep);
+      continue;
+    }
+
+    const kept = [];
+    items.forEach(item => {
+      if (item?.kind === 'zip' && item.archiveId === record.id) {
+        releaseObjectUrl(item);
+        imageMetaCache.delete(item);
+        return;
+      }
+      kept.push(item);
+    });
+
+    episodes[ep] = kept;
+    episodeSpreadCache.delete(ep);
+  }
+
+  record.hydrated = false;
 }
 
 function mergeEpisodeMaps(base, incoming) {
@@ -2177,7 +2209,7 @@ function renderList() {
 }
 
 async function loadEp(ep, pair = 0, options = {}) {
-  const { preserveMode = false, page = 1, restoreWebtoonPage = false } = options;
+  const { preserveMode = false, page = null, restoreWebtoonPage = false } = options;
   const token = ++episodeLoadToken;
   releaseEpisodeUrls();
 
@@ -2194,7 +2226,7 @@ async function loadEp(ep, pair = 0, options = {}) {
 
   curEp = ep;
   curPair = pair;
-  curPage = page;
+  curPage = page || 1;
 
   document.getElementById(`ei-${ep}`)?.classList.add('active');
   document.getElementById(`ei-${ep}`)?.scrollIntoView({ block: 'nearest' });
@@ -2204,6 +2236,14 @@ async function loadEp(ep, pair = 0, options = {}) {
   if (!ready) {
     showToast(`${ep}화 파일을 찾을 수 없어요`);
     return;
+  }
+
+  if (curMode === 'spread') {
+    await ensureEpisodeSpreadLayout(ep);
+    if (token !== episodeLoadToken) return;
+    const spreads = getSpreads(episodes[ep], ep);
+    curPair = page ? pageToPair(ep, page) : pair;
+    if (curPair >= spreads.length) curPair = Math.max(0, spreads.length - 1);
   }
 
   closeSidebar();
@@ -2232,8 +2272,10 @@ function setReaderMode(mode) {
     const page = getCurrentSpreadLastPage();
     renderWebtoonReader(curEp, { page, restoreWebtoonPage: true });
   } else {
-    curPair = pageToPair(curEp, curPage);
-    drawSpread();
+    void ensureEpisodeSpreadLayout(curEp).then(() => {
+      curPair = pageToPair(curEp, curPage);
+      drawSpread();
+    });
   }
 }
 
@@ -2262,7 +2304,7 @@ function drawSpread() {
   if (!curEp) return;
   const token = ++spreadRenderToken;
   const files = episodes[curEp];
-  const spreads = getSpreads(files);
+  const spreads = getSpreads(files, curEp);
 
   if (curPair < 0) curPair = 0;
   if (curPair >= spreads.length) {
@@ -2299,7 +2341,7 @@ function drawSpread() {
 }
 
 function preloadSpreadNeighbors() {
-  const spreads = getSpreads(episodes[curEp]);
+  const spreads = getSpreads(episodes[curEp], curEp);
   [spreads[curPair - 1], spreads[curPair + 1]].forEach(spread => {
     if (!spread) return;
     if (spread.right) ensureObjectUrl(spread.right);
@@ -2320,6 +2362,7 @@ function renderWebtoonReader(startEp, options = {}) {
     if (!ready || curMode !== 'webtoon' || curEp !== startEp) return;
     webtoonStack.innerHTML = '';
     renderWebtoonEpisodeBlock(startEp);
+    pruneWebtoonEpisodeBlocks();
     if (restoreWebtoonPage) {
       requestAnimationFrame(() => scrollToWebtoonPage(startEp, page));
     }
@@ -2374,6 +2417,7 @@ function renderWebtoonEpisodeBlock(ep) {
 
   webtoonStack.appendChild(block);
   observeWebtoonImages(block);
+  pruneWebtoonEpisodeBlocks();
 }
 
 function observeWebtoonImages(block) {
@@ -2430,6 +2474,7 @@ async function maybeAppendNextEpisode() {
     webtoonRenderedEpisodes.push(nextEp);
     webtoonAutoloaded.add(nextEp);
     renderWebtoonEpisodeBlock(nextEp);
+    trimEpisodeDataAround(curEp);
     showToast(`${nextEp}화 이어서 로드`);
   } finally {
     webtoonLoadingNext = false;
@@ -2497,7 +2542,11 @@ function updateCurrentWebtoonProgress() {
     highlightEpisodeItem(ep);
     updateHUD();
     saveCurrentProgress();
-    if (prevEp !== ep) renderList();
+    if (prevEp !== ep) {
+      pruneWebtoonEpisodeBlocks();
+      trimEpisodeDataAround(ep);
+      renderList();
+    }
   } else {
     updateHUD();
     saveCurrentProgress();
@@ -2525,7 +2574,7 @@ function highlightEpisodeItem(ep) {
 
 function tapLeft() {
   if (curMode !== 'spread') return;
-  const spreads = getSpreads(episodes[curEp]);
+  const spreads = getSpreads(episodes[curEp], curEp);
   if (curPair + 1 < spreads.length) {
     curPair++;
     drawSpread();
@@ -2560,8 +2609,8 @@ function loadPrevEpisode(goLast = false) {
   if (curMode === 'webtoon') {
     loadEp(targetEp, 0, { preserveMode: true, page: goLast ? episodes[targetEp].length : 1, restoreWebtoonPage: true });
   } else {
-    const pair = goLast ? Math.max(0, getSpreads(episodes[targetEp]).length - 1) : 0;
-    loadEp(targetEp, pair, { preserveMode: true });
+    const page = goLast ? (episodes[targetEp]?.length || 1) : 1;
+    loadEp(targetEp, 0, { preserveMode: true, page });
   }
   showToast(`${targetEp}화`);
 }
@@ -2639,7 +2688,7 @@ function updateHUD() {
   if (curMode === 'webtoon') {
     document.getElementById('hud-page').textContent = `${curPage} / ${total}p`;
   } else {
-    const spreads = getSpreads(episodes[curEp]);
+    const spreads = getSpreads(episodes[curEp], curEp);
     const spread = spreads[curPair];
     if (!spread) return;
     document.getElementById('hud-page').textContent =
@@ -2649,33 +2698,71 @@ function updateHUD() {
   }
 }
 
-function getSpreads(files) {
+function getSpreads(files, ep = null) {
+  const cached = ep !== null ? episodeSpreadCache.get(ep) : null;
+  if (cached?.files === files) return cached.spreads;
+  return buildFallbackSpreads(files);
+}
+
+function buildFallbackSpreads(files) {
   const spreads = [];
   if (!files?.length) return spreads;
 
-  let start = 0;
-  if (firstSingleInput.checked) {
-    spreads.push({ right: files[0], left: null, pages: [1] });
-    start = 1;
-  }
-
-  for (let i = start; i < files.length; i += 2) {
-    const first = files[i];
-    const second = files[i + 1];
-    if (second) spreads.push({ right: second, left: first, pages: [i + 2, i + 1] });
-    else spreads.push({ right: first, left: null, pages: [i + 1] });
+  for (let i = 0; i < files.length; i++) {
+    spreads.push({ right: files[i], left: null, pages: [i + 1] });
   }
   return spreads;
 }
 
+async function ensureEpisodeSpreadLayout(ep) {
+  const files = episodes[ep];
+  if (!files?.length) return [];
+
+  const cached = episodeSpreadCache.get(ep);
+  if (cached?.files === files) return cached.spreads;
+
+  const spreads = [];
+  let index = 0;
+
+  if (firstSingleInput.checked) {
+    spreads.push({ right: files[0], left: null, pages: [1] });
+    index = 1;
+  }
+
+  while (index < files.length) {
+    const first = files[index];
+    const second = files[index + 1];
+    const firstMeta = await ensureImageMeta(first);
+
+    if (!second || firstMeta.orientation === 'landscape') {
+      spreads.push({ right: first, left: null, pages: [index + 1] });
+      index += 1;
+      continue;
+    }
+
+    const secondMeta = await ensureImageMeta(second);
+    if (secondMeta.orientation === 'portrait') {
+      spreads.push({ right: second, left: first, pages: [index + 2, index + 1] });
+      index += 2;
+      continue;
+    }
+
+    spreads.push({ right: first, left: null, pages: [index + 1] });
+    index += 1;
+  }
+
+  episodeSpreadCache.set(ep, { files, spreads });
+  return spreads;
+}
+
 function pageToPair(ep, page) {
-  const spreads = getSpreads(episodes[ep]);
+  const spreads = getSpreads(episodes[ep], ep);
   const index = spreads.findIndex(spread => spread.pages.includes(page));
   return index >= 0 ? index : 0;
 }
 
 function spreadToLastPage(ep, pair) {
-  const spreads = getSpreads(episodes[ep]);
+  const spreads = getSpreads(episodes[ep], ep);
   const spread = spreads[pair];
   return spread ? Math.max(...spread.pages) : 1;
 }
@@ -2732,9 +2819,12 @@ function toggleFirstSingleHUD() {
   firstSingleInput.checked = !firstSingleInput.checked;
   saveFirstSingle(firstSingleInput.checked);
   syncFirstSingleHUD();
+  episodeSpreadCache = new Map();
   if (curEp) {
-    curPair = pageToPair(curEp, curPage);
-    drawSpread();
+    void ensureEpisodeSpreadLayout(curEp).then(() => {
+      curPair = pageToPair(curEp, curPage);
+      drawSpread();
+    });
   }
 }
 
@@ -2872,6 +2962,8 @@ function getResumeToast(progress) {
 function resetApp() {
   releaseEpisodeUrls();
   zipArchiveCache = new Map();
+  imageMetaCache = new Map();
+  episodeSpreadCache = new Map();
   zipArchives = [];
   disconnectWebtoonObservers();
   curEp = null;
@@ -2921,6 +3013,65 @@ async function ensureObjectUrl(file) {
 
   objectUrlCache.set(file, { url: null, promise });
   return promise;
+}
+
+async function ensureImageMeta(file) {
+  if (!file) return { width: 0, height: 0, orientation: 'portrait' };
+  const cached = imageMetaCache.get(file);
+  if (cached?.meta) return cached.meta;
+  if (cached?.promise) return cached.promise;
+
+  const promise = (async () => {
+    const blob = await getEntryBlob(file);
+    const meta = await readImageMeta(blob);
+    imageMetaCache.set(file, { meta, promise: null });
+    return meta;
+  })();
+
+  imageMetaCache.set(file, { meta: null, promise });
+  return promise;
+}
+
+async function getEntryBlob(file) {
+  if (file?.kind === 'zip') {
+    const archive = await ensureZipArchiveOpen(file.archiveId);
+    const entry = archive?.file(file.entryName);
+    if (!entry) throw new Error(`ZIP entry not found: ${file.entryName}`);
+    return entry.async('blob');
+  }
+  return file;
+}
+
+async function readImageMeta(blob) {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(blob);
+    const meta = {
+      width: bitmap.width,
+      height: bitmap.height,
+      orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait'
+    };
+    bitmap.close();
+    return meta;
+  }
+
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const meta = {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        orientation: img.naturalWidth > img.naturalHeight ? 'landscape' : 'portrait'
+      };
+      URL.revokeObjectURL(url);
+      resolve(meta);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('이미지 크기 분석 실패'));
+    };
+    img.src = url;
+  });
 }
 
 async function ensureZipArchiveOpen(archiveId) {
@@ -2980,6 +3131,41 @@ function disconnectWebtoonObservers() {
   if (webtoonSentinelObserver) webtoonSentinelObserver.disconnect();
   webtoonObserver = null;
   webtoonSentinelObserver = null;
+}
+
+function pruneWebtoonEpisodeBlocks() {
+  if (!webtoonRenderedEpisodes.length) return;
+  const currentIndex = epKeys.indexOf(curEp);
+  if (currentIndex < 0) return;
+
+  const keepFrom = Math.max(0, currentIndex - WEBTOON_EPISODE_KEEP_BEHIND);
+  const keepTo = Math.min(epKeys.length - 1, currentIndex + WEBTOON_EPISODE_KEEP_AHEAD);
+  const keep = new Set(epKeys.slice(keepFrom, keepTo + 1));
+
+  webtoonRenderedEpisodes = webtoonRenderedEpisodes.filter(ep => {
+    if (keep.has(ep)) return true;
+    removeWebtoonEpisodeBlock(ep);
+    return false;
+  });
+}
+
+function removeWebtoonEpisodeBlock(ep) {
+  const block = webtoonStack.querySelector(`.episode-block[data-ep="${ep}"]`);
+  if (!block) return;
+
+  block.querySelectorAll('.webtoon-frame').forEach(frame => {
+    if (webtoonObserver) webtoonObserver.unobserve(frame);
+    webtoonVisibleState(frame, false);
+    unloadWebtoonFrame(frame);
+  });
+
+  block.remove();
+}
+
+function trimEpisodeDataAround(ep) {
+  const activeIndex = zipArchives.findIndex(item => ep >= item.startEp && ep <= item.endEp);
+  if (activeIndex < 0) return;
+  trimHydratedArchives(activeIndex);
 }
 
 function extractPageNumber(name) {
