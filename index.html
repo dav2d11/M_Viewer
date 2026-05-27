@@ -1698,10 +1698,12 @@ let zipArchiveCache = new Map();
 let zipArchives = [];
 let webtoonObserver = null;
 let webtoonSentinelObserver = null;
-let webtoonVisible = [];
+let webtoonVisible = new Map();
 let webtoonRenderedEpisodes = [];
 let webtoonAutoloaded = new Set();
 let webtoonLoadingNext = false;
+let webtoonProgressRaf = 0;
+let webtoonAppendRaf = 0;
 let saveProgressTimer = null;
 let cloudSyncTimer = null;
 let remoteProgressStore = {};
@@ -2353,10 +2355,12 @@ function preloadSpreadNeighbors() {
 function renderWebtoonReader(startEp, options = {}) {
   const { page = 1, restoreWebtoonPage = false } = options;
   disconnectWebtoonObservers();
-  webtoonVisible = [];
+  webtoonVisible = new Map();
   webtoonRenderedEpisodes = [startEp];
   webtoonAutoloaded = new Set([startEp]);
   webtoonLoadingNext = false;
+  webtoonProgressRaf = 0;
+  webtoonAppendRaf = 0;
   webtoonStack.innerHTML = '';
 
   void ensureEpisodeReady(startEp).then(ready => {
@@ -2434,7 +2438,7 @@ function observeWebtoonImages(block) {
           maybeUnloadWebtoonFrame(frame);
         }
       }
-      updateCurrentWebtoonProgress();
+      queueWebtoonProgressUpdate();
     }, {
       root: webtoonReader,
       rootMargin: '1200px 0px 1200px 0px',
@@ -2514,23 +2518,38 @@ function webtoonVisibleState(frame, entering) {
   const key = `${ep}:${page}`;
 
   if (entering) {
-    if (!webtoonVisible.find(item => item.key === key)) {
-      webtoonVisible.push({ key, ep, page, frame });
-    }
+    webtoonVisible.set(key, { ep, page, frame });
   } else {
-    webtoonVisible = webtoonVisible.filter(item => item.key !== key);
+    webtoonVisible.delete(key);
   }
+}
+
+function queueWebtoonProgressUpdate() {
+  if (webtoonProgressRaf) return;
+  webtoonProgressRaf = requestAnimationFrame(() => {
+    webtoonProgressRaf = 0;
+    updateCurrentWebtoonProgress();
+  });
+}
+
+function queueWebtoonAppendCheck() {
+  if (webtoonAppendRaf) return;
+  webtoonAppendRaf = requestAnimationFrame(() => {
+    webtoonAppendRaf = 0;
+    const nearBottom = webtoonReader.scrollHeight - webtoonReader.scrollTop - webtoonReader.clientHeight < 900;
+    if (nearBottom) maybeAppendNextEpisode();
+  });
 }
 
 function updateCurrentWebtoonProgress() {
   if (curMode !== 'webtoon') return;
-  if (!webtoonVisible.length) return;
+  if (!webtoonVisible.size) return;
 
   let chosen = null;
   let best = Infinity;
   const readerTop = webtoonReader.getBoundingClientRect().top + 100;
 
-  for (const item of webtoonVisible) {
+  for (const item of webtoonVisible.values()) {
     const rect = item.frame.getBoundingClientRect();
     const dist = Math.abs(rect.top - readerTop);
     if (dist < best) {
@@ -2556,18 +2575,13 @@ function updateCurrentWebtoonProgress() {
       trimEpisodeDataAround(ep);
       renderList();
     }
-  } else {
-    updateHUD();
-    saveCurrentProgress();
   }
 }
 
 function handleWebtoonScroll() {
   if (curMode !== 'webtoon') return;
-  updateCurrentWebtoonProgress();
-
-  const nearBottom = webtoonReader.scrollHeight - webtoonReader.scrollTop - webtoonReader.clientHeight < 900;
-  if (nearBottom) maybeAppendNextEpisode();
+  queueWebtoonProgressUpdate();
+  queueWebtoonAppendCheck();
 }
 
 function scrollToWebtoonPage(ep, page) {
@@ -3140,6 +3154,10 @@ function disconnectWebtoonObservers() {
   if (webtoonSentinelObserver) webtoonSentinelObserver.disconnect();
   webtoonObserver = null;
   webtoonSentinelObserver = null;
+  if (webtoonProgressRaf) cancelAnimationFrame(webtoonProgressRaf);
+  if (webtoonAppendRaf) cancelAnimationFrame(webtoonAppendRaf);
+  webtoonProgressRaf = 0;
+  webtoonAppendRaf = 0;
 }
 
 function pruneWebtoonEpisodeBlocks() {
