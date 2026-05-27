@@ -1670,8 +1670,9 @@ const DEFAULT_CLOUD_CONFIG = {
 const FILE_PROCESS_CHUNK = 250;
 const LARGE_SELECTION_THRESHOLD = 4000;
 const WEBTOON_UNLOAD_DISTANCE = 2400;
-const WEBTOON_EPISODE_KEEP_BEHIND = 1;
-const WEBTOON_EPISODE_KEEP_AHEAD = 1;
+const WEBTOON_EPISODE_KEEP_BEHIND = 2;
+const WEBTOON_EPISODE_KEEP_AHEAD = 3;
+const WEBTOON_AUTOPREFETCH_AHEAD = 2;
 const ARCHIVE_NEIGHBORHOOD = 1;
 
 let episodes = {};
@@ -2460,22 +2461,30 @@ function observeWebtoonSentinel() {
 
 async function maybeAppendNextEpisode() {
   if (webtoonLoadingNext || !document.getElementById('binge').checked) return;
-  const lastEp = webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1];
-  const idx = epKeys.indexOf(lastEp);
-  if (idx < 0 || idx >= epKeys.length - 1) return;
-
-  const nextEp = epKeys[idx + 1];
-  if (webtoonAutoloaded.has(nextEp)) return;
-
   webtoonLoadingNext = true;
   try {
-    const ready = await ensureEpisodeReady(nextEp);
-    if (!ready) return;
-    webtoonRenderedEpisodes.push(nextEp);
-    webtoonAutoloaded.add(nextEp);
-    renderWebtoonEpisodeBlock(nextEp);
-    trimEpisodeDataAround(curEp);
-    showToast(`${nextEp}화 이어서 로드`);
+    let appended = 0;
+    while (appended < WEBTOON_AUTOPREFETCH_AHEAD) {
+      const lastEp = webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1];
+      const idx = epKeys.indexOf(lastEp);
+      if (idx < 0 || idx >= epKeys.length - 1) break;
+
+      const nextEp = epKeys[idx + 1];
+      if (webtoonAutoloaded.has(nextEp)) break;
+
+      const ready = await ensureEpisodeReady(nextEp);
+      if (!ready) break;
+
+      webtoonRenderedEpisodes.push(nextEp);
+      webtoonAutoloaded.add(nextEp);
+      renderWebtoonEpisodeBlock(nextEp);
+      appended += 1;
+    }
+
+    if (appended) {
+      trimEpisodeDataAround(curEp);
+      showToast(`${webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1]}화까지 이어서 로드`);
+    }
   } finally {
     webtoonLoadingNext = false;
   }
