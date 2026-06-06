@@ -997,9 +997,16 @@
     overflow-y: auto;
     overflow-x: hidden;
     scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
       #050505;
+    transition: opacity 0.26s ease, transform 0.26s ease;
+  }
+
+  #webtoon-reader.switching {
+    opacity: 0;
+    transform: translateY(18px);
   }
 
   .webtoon-stack {
@@ -1062,6 +1069,105 @@
   body.app-mode-webtoon .webtoon-stack {
     width: min(100%, 1080px);
     padding: 58px 0 0;
+  }
+
+  .webtoon-next-gate {
+    display: none;
+    min-height: 340px;
+    padding: 42px 18px 70px;
+    background: #000;
+    color: #fff;
+    place-items: center;
+    text-align: center;
+  }
+
+  body.app-mode-webtoon .webtoon-next-gate {
+    display: grid;
+  }
+
+  .next-gate-inner {
+    display: grid;
+    justify-items: center;
+    gap: 16px;
+  }
+
+  .next-gate-circle {
+    --gate-progress: 0deg;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: conic-gradient(#fff var(--gate-progress), rgba(255, 255, 255, 0.16) 0deg);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 16px 40px rgba(0, 0, 0, 0.46);
+    transition: background 0.08s linear, transform 0.18s ease;
+  }
+
+  .next-gate-circle::after {
+    content: '';
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #000;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  }
+
+  .webtoon-next-gate.ready .next-gate-circle {
+    transform: scale(1.08);
+  }
+
+  .next-gate-label {
+    min-height: 18px;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .next-gate-btn {
+    min-width: 132px;
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: #fff;
+    color: #000;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .webtoon-ui-actions {
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    z-index: 26;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: translate(-50%, 16px);
+    transition: opacity 0.24s ease, transform 0.24s ease;
+    pointer-events: none;
+  }
+
+  .webtoon-ui-actions.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    pointer-events: all;
+  }
+
+  .webtoon-ui-btn {
+    min-width: 78px;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(10, 10, 10, 0.72);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
   }
 
   body.app-mode-webtoon .episode-block {
@@ -1191,14 +1297,20 @@
     position: absolute;
     inset: 0;
     z-index: 15;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: space-between;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.24s ease;
   }
 
   #nav-ov.visible {
-    display: flex;
+    opacity: 1;
+  }
+
+  #nav-ov.visible .arr-btn {
+    pointer-events: all;
   }
 
   .arr-btn {
@@ -1207,7 +1319,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: all;
+    pointer-events: none;
     cursor: pointer;
     background: linear-gradient(to right, rgba(0, 0, 0, 0.52), transparent);
   }
@@ -1242,12 +1354,14 @@
     gap: 10px;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
     opacity: 0;
-    transition: opacity 0.22s ease;
+    transform: translateY(-12px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
     pointer-events: none;
   }
 
   #hud.visible {
     opacity: 1;
+    transform: translateY(0);
     pointer-events: all;
   }
 
@@ -1609,6 +1723,13 @@
 
     <div id="webtoon-reader">
       <div class="webtoon-stack" id="webtoon-stack"></div>
+      <div class="webtoon-next-gate" id="webtoon-next-gate">
+        <div class="next-gate-inner">
+          <div class="next-gate-circle" id="next-gate-circle"></div>
+          <div class="next-gate-label" id="next-gate-label">계속 내리면 다음 화로 이동합니다</div>
+          <button class="next-gate-btn" type="button" onclick="loadNextEpisode()">다음 화</button>
+        </div>
+      </div>
       <div class="sentinel" id="webtoon-sentinel"></div>
     </div>
 
@@ -1628,6 +1749,12 @@
       <button class="hud-btn" id="hud-mode" onclick="toggleReaderMode()" title="리더 모드 전환">↕</button>
       <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
       <button class="hud-btn" onclick="toggleSidebar()" title="메뉴">☰</button>
+    </div>
+
+    <div class="webtoon-ui-actions" id="webtoon-ui-actions">
+      <button class="webtoon-ui-btn" type="button" onclick="loadPrevEpisode(true)">이전 화</button>
+      <button class="webtoon-ui-btn" type="button" onclick="toggleSidebar()">메뉴</button>
+      <button class="webtoon-ui-btn" type="button" onclick="loadNextEpisode()">다음 화</button>
     </div>
 
     <div id="end-screen">
@@ -1704,6 +1831,10 @@ let webtoonAutoloaded = new Set();
 let webtoonLoadingNext = false;
 let webtoonProgressRaf = 0;
 let webtoonAppendRaf = 0;
+let webtoonGateRaf = 0;
+let webtoonGateTriggered = false;
+let webtoonGateArmed = false;
+let webtoonGateInputSeen = false;
 let saveProgressTimer = null;
 let cloudSyncTimer = null;
 let remoteProgressStore = {};
@@ -1726,6 +1857,10 @@ const loadingNote = document.getElementById('loading-note');
 const webtoonReader = document.getElementById('webtoon-reader');
 const webtoonStack = document.getElementById('webtoon-stack');
 const webtoonSentinel = document.getElementById('webtoon-sentinel');
+const webtoonNextGate = document.getElementById('webtoon-next-gate');
+const nextGateCircle = document.getElementById('next-gate-circle');
+const nextGateLabel = document.getElementById('next-gate-label');
+const webtoonUiActions = document.getElementById('webtoon-ui-actions');
 const spreadReader = document.getElementById('spread-reader');
 const archiveInput = document.getElementById('archive-input');
 const folderInput = document.getElementById('folder-input');
@@ -1747,6 +1882,9 @@ firstSingleInput.addEventListener('change', () => {
 });
 fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
 webtoonReader.addEventListener('scroll', handleWebtoonScroll, { passive: true });
+webtoonReader.addEventListener('wheel', markWebtoonGateInput, { passive: true });
+webtoonReader.addEventListener('touchmove', markWebtoonGateInput, { passive: true });
+webtoonReader.addEventListener('pointerdown', markWebtoonGateInput, { passive: true });
 document.addEventListener('fullscreenchange', syncFullscreenToggle);
 archiveInput.addEventListener('change', handleFileSelection);
 folderInput.addEventListener('change', handleFileSelection);
@@ -2361,7 +2499,12 @@ function renderWebtoonReader(startEp, options = {}) {
   webtoonLoadingNext = false;
   webtoonProgressRaf = 0;
   webtoonAppendRaf = 0;
+  webtoonGateRaf = 0;
+  webtoonGateTriggered = false;
+  webtoonGateArmed = false;
+  webtoonGateInputSeen = false;
   webtoonStack.innerHTML = '';
+  resetWebtoonNextGate();
 
   void ensureEpisodeReady(startEp).then(ready => {
     if (!ready || curMode !== 'webtoon' || curEp !== startEp) return;
@@ -2371,6 +2514,7 @@ function renderWebtoonReader(startEp, options = {}) {
     if (restoreWebtoonPage) {
       requestAnimationFrame(() => scrollToWebtoonPage(startEp, page));
     }
+    resetWebtoonNextGate();
   });
   observeWebtoonSentinel();
   updateHUD();
@@ -2379,6 +2523,7 @@ function renderWebtoonReader(startEp, options = {}) {
 
   requestAnimationFrame(() => {
     webtoonReader.scrollTop = 0;
+    webtoonReader.classList.remove('switching');
   });
 }
 
@@ -2455,43 +2600,16 @@ function observeWebtoonSentinel() {
     const entry = entries[0];
     if (!entry?.isIntersecting) return;
     if (curMode !== 'webtoon') return;
-    maybeAppendNextEpisode();
+    queueWebtoonGateUpdate();
   }, {
     root: webtoonReader,
-    rootMargin: '1000px 0px 1000px 0px'
+    rootMargin: '0px'
   });
   webtoonSentinelObserver.observe(webtoonSentinel);
 }
 
 async function maybeAppendNextEpisode() {
-  if (webtoonLoadingNext || !document.getElementById('binge').checked) return;
-  webtoonLoadingNext = true;
-  try {
-    let appended = 0;
-    while (appended < WEBTOON_AUTOPREFETCH_AHEAD) {
-      const lastEp = webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1];
-      const idx = epKeys.indexOf(lastEp);
-      if (idx < 0 || idx >= epKeys.length - 1) break;
-
-      const nextEp = epKeys[idx + 1];
-      if (webtoonAutoloaded.has(nextEp)) break;
-
-      const ready = await ensureEpisodeReady(nextEp);
-      if (!ready) break;
-
-      webtoonRenderedEpisodes.push(nextEp);
-      webtoonAutoloaded.add(nextEp);
-      renderWebtoonEpisodeBlock(nextEp);
-      appended += 1;
-    }
-
-    if (appended) {
-      trimEpisodeDataAround(curEp);
-      showToast(`${webtoonRenderedEpisodes[webtoonRenderedEpisodes.length - 1]}화까지 이어서 로드`);
-    }
-  } finally {
-    webtoonLoadingNext = false;
-  }
+  queueWebtoonGateUpdate();
 }
 
 function loadWebtoonFrame(frame) {
@@ -2536,9 +2654,80 @@ function queueWebtoonAppendCheck() {
   if (webtoonAppendRaf) return;
   webtoonAppendRaf = requestAnimationFrame(() => {
     webtoonAppendRaf = 0;
-    const nearBottom = webtoonReader.scrollHeight - webtoonReader.scrollTop - webtoonReader.clientHeight < 900;
-    if (nearBottom) maybeAppendNextEpisode();
+    updateWebtoonNextGate();
   });
+}
+
+function queueWebtoonGateUpdate() {
+  if (webtoonGateRaf) return;
+  webtoonGateRaf = requestAnimationFrame(() => {
+    webtoonGateRaf = 0;
+    updateWebtoonNextGate();
+  });
+}
+
+function resetWebtoonNextGate() {
+  webtoonGateTriggered = false;
+  webtoonGateArmed = false;
+  webtoonGateInputSeen = false;
+  webtoonNextGate?.classList.remove('ready');
+  if (nextGateCircle) nextGateCircle.style.setProperty('--gate-progress', '0deg');
+  if (nextGateLabel) {
+    nextGateLabel.textContent = resolveNextEpisode(curEp)
+      ? '계속 내리면 다음 화로 이동합니다'
+      : '마지막 화입니다';
+  }
+}
+
+function updateWebtoonNextGate() {
+  if (curMode !== 'webtoon' || !webtoonNextGate) return;
+  const nextEp = resolveNextEpisode(curEp);
+  if (!nextEp) {
+    webtoonNextGate.classList.remove('ready');
+    if (nextGateCircle) nextGateCircle.style.setProperty('--gate-progress', '0deg');
+    if (nextGateLabel) nextGateLabel.textContent = '마지막 화입니다';
+    return;
+  }
+
+  const frames = webtoonStack.querySelectorAll(`.webtoon-frame[data-ep="${curEp}"]`);
+  const lastFrame = frames[frames.length - 1];
+  if (!webtoonGateArmed || !lastFrame?.classList.contains('loaded')) {
+    webtoonNextGate.classList.remove('ready');
+    if (nextGateCircle) nextGateCircle.style.setProperty('--gate-progress', '0deg');
+    if (nextGateLabel) nextGateLabel.textContent = '계속 내리면 다음 화로 이동합니다';
+    return;
+  }
+
+  const gateRect = webtoonNextGate.getBoundingClientRect();
+  const readerRect = webtoonReader.getBoundingClientRect();
+  const lastFrameRect = lastFrame.getBoundingClientRect();
+  if (lastFrameRect.bottom > readerRect.bottom + 12) {
+    webtoonNextGate.classList.remove('ready');
+    if (nextGateCircle) nextGateCircle.style.setProperty('--gate-progress', '0deg');
+    if (nextGateLabel) nextGateLabel.textContent = '계속 내리면 다음 화로 이동합니다';
+    return;
+  }
+
+  const travel = Math.max(180, webtoonNextGate.clientHeight - 90);
+  const entered = readerRect.bottom - gateRect.top;
+  const progress = Math.max(0, Math.min(1, entered / travel));
+
+  if (nextGateCircle) nextGateCircle.style.setProperty('--gate-progress', `${Math.round(progress * 360)}deg`);
+  webtoonNextGate.classList.toggle('ready', progress >= 1);
+  if (nextGateLabel) {
+    nextGateLabel.textContent = progress >= 1 ? `${nextEp}화로 이동합니다` : '계속 내리면 다음 화로 이동합니다';
+  }
+
+  if (progress >= 1 && !webtoonGateTriggered) {
+    webtoonGateTriggered = true;
+    setTimeout(() => {
+      if (curMode === 'webtoon' && resolveNextEpisode(curEp) === nextEp) loadNextEpisode();
+    }, 140);
+  }
+}
+
+function markWebtoonGateInput() {
+  if (curMode === 'webtoon') webtoonGateInputSeen = true;
 }
 
 function updateCurrentWebtoonProgress() {
@@ -2580,14 +2769,16 @@ function updateCurrentWebtoonProgress() {
 
 function handleWebtoonScroll() {
   if (curMode !== 'webtoon') return;
+  if (webtoonGateInputSeen && webtoonReader.scrollTop > 40) webtoonGateArmed = true;
   queueWebtoonProgressUpdate();
   queueWebtoonAppendCheck();
+  queueWebtoonGateUpdate();
 }
 
-function scrollToWebtoonPage(ep, page) {
+function scrollToWebtoonPage(ep, page, behavior = 'smooth') {
   const target = webtoonStack.querySelector(`.webtoon-frame[data-ep="${ep}"][data-page="${page}"]`);
   if (!target) return;
-  target.scrollIntoView({ block: 'start' });
+  target.scrollIntoView({ block: 'start', behavior });
 }
 
 function highlightEpisodeItem(ep) {
@@ -2596,6 +2787,12 @@ function highlightEpisodeItem(ep) {
 }
 
 function tapLeft() {
+  if (curMode === 'webtoon') {
+    if (!navOn) return;
+    loadPrevEpisode(true);
+    hideNav();
+    return;
+  }
   if (curMode !== 'spread') return;
   const spreads = getSpreads(episodes[curEp], curEp);
   if (curPair + 1 < spreads.length) {
@@ -2608,6 +2805,12 @@ function tapLeft() {
 }
 
 function tapRight() {
+  if (curMode === 'webtoon') {
+    if (!navOn) return;
+    loadNextEpisode();
+    hideNav();
+    return;
+  }
   if (curMode !== 'spread') return;
   if (curPair > 0) {
     curPair--;
@@ -2619,7 +2822,6 @@ function tapRight() {
 }
 
 function tapCenter() {
-  if (curMode !== 'spread') return;
   toggleNav();
 }
 
@@ -2630,7 +2832,7 @@ function loadPrevEpisode(goLast = false) {
     return;
   }
   if (curMode === 'webtoon') {
-    loadEp(targetEp, 0, { preserveMode: true, page: goLast ? episodes[targetEp].length : 1, restoreWebtoonPage: true });
+    loadWebtoonEpisodeWithTransition(targetEp, goLast ? episodes[targetEp].length : 1);
   } else {
     const page = goLast ? (episodes[targetEp]?.length || 1) : 1;
     loadEp(targetEp, 0, { preserveMode: true, page });
@@ -2645,11 +2847,19 @@ function loadNextEpisode() {
     return;
   }
   if (curMode === 'webtoon') {
-    loadEp(targetEp, 0, { preserveMode: true, page: 1, restoreWebtoonPage: true });
+    loadWebtoonEpisodeWithTransition(targetEp, 1);
   } else {
     loadEp(targetEp, 0, { preserveMode: true });
   }
   showToast(`${targetEp}화`);
+}
+
+function loadWebtoonEpisodeWithTransition(ep, page = 1) {
+  webtoonReader.classList.add('switching');
+  hideNav();
+  setTimeout(() => {
+    loadEp(ep, 0, { preserveMode: true, page, restoreWebtoonPage: true });
+  }, 180);
 }
 
 function resolvePrevEpisode(ep) {
@@ -2687,18 +2897,21 @@ function toggleNav() {
 }
 
 function showNav() {
-  if (curMode !== 'spread') return;
+  if (curMode !== 'spread' && curMode !== 'webtoon') return;
   navOn = true;
   document.getElementById('nav-ov').classList.add('visible');
   document.getElementById('hud').classList.add('visible');
+  webtoonUiActions?.classList.toggle('visible', curMode === 'webtoon');
   clearTimeout(navTimer);
-  navTimer = setTimeout(hideNav, 3000);
+  if (curMode === 'spread') navTimer = setTimeout(hideNav, 3000);
 }
 
 function hideNav() {
   navOn = false;
   document.getElementById('nav-ov').classList.remove('visible');
+  webtoonUiActions?.classList.remove('visible');
   if (curMode === 'spread') document.getElementById('hud').classList.remove('visible');
+  if (curMode === 'webtoon') document.getElementById('hud').classList.remove('visible');
 }
 
 function updateHUD() {
@@ -2878,17 +3091,27 @@ function setSidebarTab(tab) {
   document.getElementById('sidebar-tab-episodes').classList.toggle('active', !isSettings);
   document.getElementById('sidebar-page-settings').classList.toggle('active', isSettings);
   document.getElementById('sidebar-page-episodes').classList.toggle('active', !isSettings);
+  if (!isSettings) requestAnimationFrame(() => scrollActiveEpisodeIntoView('center'));
 }
 
 function openSidebar() {
   setSidebarTab(appMode === 'webtoon' ? 'episodes' : 'settings');
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sb-overlay').classList.add('open');
+  requestAnimationFrame(() => scrollActiveEpisodeIntoView('center'));
 }
 
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sb-overlay').classList.remove('open');
+}
+
+function scrollActiveEpisodeIntoView(block = 'nearest') {
+  if (!curEp) return;
+  const item = document.getElementById(`ei-${curEp}`);
+  const page = document.getElementById('sidebar-page-episodes');
+  if (!item || !page?.classList.contains('active')) return;
+  item.scrollIntoView({ block, behavior: 'smooth' });
 }
 
 function showToast(msg) {
@@ -3156,8 +3379,10 @@ function disconnectWebtoonObservers() {
   webtoonSentinelObserver = null;
   if (webtoonProgressRaf) cancelAnimationFrame(webtoonProgressRaf);
   if (webtoonAppendRaf) cancelAnimationFrame(webtoonAppendRaf);
+  if (webtoonGateRaf) cancelAnimationFrame(webtoonGateRaf);
   webtoonProgressRaf = 0;
   webtoonAppendRaf = 0;
+  webtoonGateRaf = 0;
 }
 
 function pruneWebtoonEpisodeBlocks() {
@@ -3339,10 +3564,12 @@ document.addEventListener('keydown', e => {
   } else {
     if (e.key === 'ArrowDown' || e.key === ' ') {
       e.preventDefault();
+      markWebtoonGateInput();
       webtoonReader.scrollBy({ top: Math.round(window.innerHeight * 0.85), behavior: 'smooth' });
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
+      markWebtoonGateInput();
       webtoonReader.scrollBy({ top: -Math.round(window.innerHeight * 0.85), behavior: 'smooth' });
     }
   }
