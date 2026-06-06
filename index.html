@@ -116,17 +116,11 @@
     font-size: clamp(48px, 10vw, 82px);
     line-height: 0.95;
     letter-spacing: 0.08em;
+    text-align: center;
   }
 
   .upload-title span {
     color: var(--accent);
-  }
-
-  .upload-sub {
-    margin-top: 12px;
-    color: var(--text-2);
-    font-size: 13px;
-    line-height: 1.6;
   }
 
   .entry-mode-row {
@@ -139,10 +133,10 @@
   .entry-mode-btn {
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 20px;
-    padding: 18px 16px;
+    padding: 24px 16px;
     background: rgba(255, 255, 255, 0.04);
     color: var(--text);
-    text-align: left;
+    text-align: center;
     cursor: pointer;
     transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
   }
@@ -161,44 +155,20 @@
 
   .entry-mode-name {
     display: block;
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 700;
-  }
-
-  .entry-mode-desc {
-    display: block;
-    margin-top: 6px;
-    color: var(--text-3);
-    font-size: 11px;
-    line-height: 1.5;
-  }
-
-  .upload-points {
-    margin-top: 18px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .upload-chip {
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text-2);
-    font-size: 12px;
+    letter-spacing: 0.02em;
   }
 
   #drop-zone {
-    margin-top: 26px;
+    margin-top: 32px;
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.11);
     border-radius: 24px;
-    padding: 38px 28px;
+    padding: 32px 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
     cursor: pointer;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
@@ -224,53 +194,19 @@
     display: none;
   }
 
-  .drop-icon {
-    width: 68px;
-    height: 68px;
-    display: grid;
-    place-items: center;
-    border-radius: 20px;
-    background: linear-gradient(180deg, rgba(255, 107, 53, 0.28), rgba(255, 107, 53, 0.10));
-    font-size: 30px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  }
-
-  .drop-text {
-    font-size: 18px;
-    font-weight: 700;
-  }
-
-  .drop-sub {
-    color: var(--text-2);
-    text-align: center;
-    line-height: 1.8;
-    font-size: 13px;
-  }
-
-  .drop-btn {
-    margin-top: 8px;
-    border: none;
-    border-radius: 999px;
-    padding: 11px 22px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: #fff;
-    font-weight: 700;
-    pointer-events: none;
-    box-shadow: 0 12px 28px rgba(255, 107, 53, 0.25);
-  }
-
   .drop-actions {
     width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+    margin-top: 0;
   }
 
   .drop-action {
+    width: 100%;
     border: none;
     border-radius: 999px;
-    padding: 11px 16px;
+    padding: 16px 24px;
+    font-size: 16px;
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
     color: #fff;
     font-weight: 700;
@@ -286,10 +222,11 @@
   }
 
   .loading-note {
-    margin-top: 14px;
+    margin-top: 18px;
     min-height: 20px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-3);
+    text-align: center;
   }
 
   .upload-menu-btn {
@@ -299,11 +236,20 @@
     z-index: 5;
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 14px;
-    padding: 10px 14px;
+    padding: 10px;
     background: rgba(12, 15, 19, 0.72);
     color: var(--text);
     cursor: pointer;
     backdrop-filter: blur(12px);
+    display: grid;
+    place-items: center;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  
+  .upload-menu-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 107, 53, 0.45);
+    background: rgba(255, 107, 53, 0.10);
   }
 
   #library-overlay {
@@ -996,7 +942,6 @@
     display: none;
     overflow-y: auto;
     overflow-x: hidden;
-    scroll-behavior: smooth;
     overscroll-behavior-y: contain;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
@@ -1549,34 +1494,24 @@
 <body>
 
 <div id="upload-screen">
-  <button class="upload-menu-btn" type="button" onclick="openLibraryOverlay()">보관함</button>
+  <button class="upload-menu-btn" type="button" onclick="openLibraryOverlay()" aria-label="보관함">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+  </button>
   <div class="upload-shell">
     <div class="upload-title">MANGA<span>.</span>VIEWER</div>
-    <div class="upload-sub">먼저 읽는 방식을 고른 뒤 ZIP이나 폴더를 엽니다.</div>
     <div class="entry-mode-row">
       <button class="entry-mode-btn" id="entry-mode-manga" type="button" onclick="selectAppMode('manga')">
-        <span class="entry-mode-name">만화 모드</span>
-        <span class="entry-mode-desc">현재 뷰어 기능 그대로</span>
+        <span class="entry-mode-name">만화모드</span>
       </button>
       <button class="entry-mode-btn" id="entry-mode-webtoon" type="button" onclick="selectAppMode('webtoon')">
-        <span class="entry-mode-name">웹툰 모드</span>
-        <span class="entry-mode-desc">스크롤 전용, 간격 없이 표시</span>
+        <span class="entry-mode-name">웹툰모드</span>
       </button>
-    </div>
-    <div class="upload-points">
-      <div class="upload-chip">ZIP 지원</div>
-      <div class="upload-chip">진행도 분리 저장</div>
-      <div class="upload-chip">클라우드 동기화</div>
     </div>
     <div id="drop-zone" class="disabled">
       <input type="file" id="archive-input" multiple accept=".zip,application/zip,image/*">
       <input type="file" id="folder-input" multiple accept="image/*" webkitdirectory>
-      <div class="drop-icon">📚</div>
-      <div class="drop-text">파일 선택</div>
-      <div class="drop-sub">`p001_001.jpg` 형식 지원</div>
       <div class="drop-actions">
-        <button class="drop-action" type="button" onclick="openArchivePicker()">ZIP / 파일 열기</button>
-        <button class="drop-action secondary" type="button" onclick="openFolderPicker()">폴더 열기</button>
+        <button class="drop-action" type="button" onclick="openFolderPicker()">폴더열기</button>
       </div>
     </div>
     <div class="loading-note" id="loading-note"></div>
@@ -1797,10 +1732,10 @@ const DEFAULT_CLOUD_CONFIG = {
 const FILE_PROCESS_CHUNK = 250;
 const LARGE_SELECTION_THRESHOLD = 4000;
 const WEBTOON_UNLOAD_DISTANCE = 2400;
-const WEBTOON_EPISODE_KEEP_BEHIND = 2;
+const WEBTOON_EPISODE_KEEP_BEHIND = 0;
 const WEBTOON_EPISODE_KEEP_AHEAD = 3;
 const WEBTOON_AUTOPREFETCH_AHEAD = 2;
-const ARCHIVE_NEIGHBORHOOD = 1;
+const ARCHIVE_NEIGHBORHOOD = 0;
 
 let episodes = {};
 let epKeys = [];
@@ -1882,7 +1817,37 @@ firstSingleInput.addEventListener('change', () => {
 });
 fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
 webtoonReader.addEventListener('scroll', handleWebtoonScroll, { passive: true });
-webtoonReader.addEventListener('wheel', markWebtoonGateInput, { passive: true });
+let smoothScrollTarget = 0;
+let smoothScrollRaf = 0;
+webtoonReader.addEventListener('wheel', (e) => {
+  if (curMode !== 'webtoon' || e.ctrlKey || e.metaKey) return;
+  const isTrackpad = Math.abs(e.deltaY) < 40 && e.deltaMode === 0;
+  if (isTrackpad) {
+    markWebtoonGateInput();
+    return;
+  }
+  e.preventDefault();
+  markWebtoonGateInput();
+  if (!smoothScrollRaf) {
+    smoothScrollTarget = webtoonReader.scrollTop;
+  }
+  let multiplier = e.deltaMode === 1 ? 40 : 1;
+  smoothScrollTarget += e.deltaY * multiplier * 1.5;
+  smoothScrollTarget = Math.max(0, Math.min(smoothScrollTarget, webtoonReader.scrollHeight - webtoonReader.clientHeight));
+  if (!smoothScrollRaf) {
+    const loop = () => {
+      const diff = smoothScrollTarget - webtoonReader.scrollTop;
+      if (Math.abs(diff) < 1) {
+        webtoonReader.scrollTop = smoothScrollTarget;
+        smoothScrollRaf = 0;
+        return;
+      }
+      webtoonReader.scrollTop += diff * 0.15;
+      smoothScrollRaf = requestAnimationFrame(loop);
+    };
+    smoothScrollRaf = requestAnimationFrame(loop);
+  }
+}, { passive: false });
 webtoonReader.addEventListener('touchmove', markWebtoonGateInput, { passive: true });
 webtoonReader.addEventListener('pointerdown', markWebtoonGateInput, { passive: true });
 document.addEventListener('fullscreenchange', syncFullscreenToggle);
@@ -2512,7 +2477,7 @@ function renderWebtoonReader(startEp, options = {}) {
     renderWebtoonEpisodeBlock(startEp);
     pruneWebtoonEpisodeBlocks();
     if (restoreWebtoonPage) {
-      requestAnimationFrame(() => scrollToWebtoonPage(startEp, page));
+      requestAnimationFrame(() => scrollToWebtoonPage(startEp, page, 'auto'));
     }
     resetWebtoonNextGate();
   });
@@ -2708,9 +2673,10 @@ function updateWebtoonNextGate() {
     return;
   }
 
-  const travel = Math.max(180, webtoonNextGate.clientHeight - 90);
-  const entered = readerRect.bottom - gateRect.top;
-  const progress = Math.max(0, Math.min(1, entered / travel));
+  const scrollMax = webtoonReader.scrollHeight - webtoonReader.clientHeight;
+  const scrollRemaining = Math.max(0, scrollMax - webtoonReader.scrollTop);
+  const fillTravel = 150;
+  const progress = Math.max(0, Math.min(1, (fillTravel - scrollRemaining) / fillTravel));
 
   if (nextGateCircle) nextGateCircle.style.setProperty('--gate-progress', `${Math.round(progress * 360)}deg`);
   webtoonNextGate.classList.toggle('ready', progress >= 1);
