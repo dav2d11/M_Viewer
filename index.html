@@ -1381,7 +1381,7 @@ imgSizeInput.addEventListener('input', e => applyImageScale(+e.target.value));
 firstSingleInput.addEventListener('change', () => {
   saveFirstSingle(firstSingleInput.checked);
   syncFirstSingleHUD();
-  episodeSpreadCache = new Map();
+  episodeSpreadCache = new Map(); episodeSpreadLayoutPending = new Map();
   if (curMode === 'spread' && curEp) {
     void ensureEpisodeSpreadLayout(curEp).then(() => {
       const spreads = getSpreads(episodes[curEp], curEp);
@@ -1395,6 +1395,8 @@ fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenTog
 webtoonReader.addEventListener('scroll', handleWebtoonScroll, { passive: true });
 webtoonReader.addEventListener('touchmove', markWebtoonGateInput, { passive: true });
 webtoonReader.addEventListener('pointerdown', markWebtoonGateInput, { passive: true });
+webtoonReader.addEventListener('pointerup', handleWebtoonGateRelease, { passive: true });
+webtoonReader.addEventListener('touchend', handleWebtoonGateRelease, { passive: true });
 document.addEventListener('fullscreenchange', syncFullscreenToggle);
 copyInput.addEventListener('change', handleFolderSelected);
 
@@ -1704,15 +1706,15 @@ async function loadThumbnail(fileHandle, index) {
     const file = await fileHandle.getFile();
     const url = URL.createObjectURL(file);
     const thumb = document.getElementById(`wthumb-${index}`);
-    if (!thumb) return;
+    if (!thumb) { URL.revokeObjectURL(url); return; }
     const img = document.createElement('img');
     img.onload = () => {
       img.classList.add('loaded');
       thumb.classList.add('has-thumb');
+      URL.revokeObjectURL(url); // 로드 완료 후 즉시 해제
     };
     img.onerror = () => { URL.revokeObjectURL(url); };
     img.src = url;
-    // placeholder 위로(DOM 앞에) img 삽입 → z-index로 img가 위에 표시됨
     thumb.insertBefore(img, thumb.firstChild);
   } catch (e) {}
 }
@@ -1748,6 +1750,7 @@ function selectWork(index) {
         thumbEl.innerHTML = '';
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;';
         thumbEl.appendChild(img);
+        URL.revokeObjectURL(url); // 로드 완료 후 즉시 해제
       };
       img.onerror = () => URL.revokeObjectURL(url);
       img.src = url;
@@ -1780,7 +1783,7 @@ async function startReading(mode) {
     releaseEpisodeUrls();
     zipArchiveCache  = new Map();
     imageMetaCache   = new Map();
-    episodeSpreadCache= new Map();
+    episodeSpreadCache= new Map(); episodeSpreadLayoutPending = new Map();
     zipArchives      = [];
     episodes         = {};
     epKeys           = [];
@@ -1857,9 +1860,12 @@ function goHome() {
   releaseEpisodeUrls();
   zipArchiveCache   = new Map();
   imageMetaCache    = new Map();
-  episodeSpreadCache= new Map();
+  episodeSpreadCache= new Map(); episodeSpreadLayoutPending = new Map();
   zipArchives       = [];
   disconnectWebtoonObservers();
+  webtoonVisible = new Map(); webtoonRenderedEpisodes = []; webtoonAutoloaded = new Set();
+  webtoonLoadingNext=false; webtoonProgressRaf=0; webtoonAppendRaf=0; webtoonGateRaf=0;
+  webtoonGateTriggered=false; webtoonGateArmed=false; webtoonGateInputSeen=false;
   curEp    = null; curPair = 0; curPage = 1;
   episodes = {}; epKeys = [];
   currentMangaId = null; currentMangaTitle = '';
@@ -1983,7 +1989,7 @@ async function hydrateArchiveNeighborhood(ep) {
 async function hydrateArchiveRecord(record) {
   if (!record || record.hydrated) return;
   if (record.hydrating) { await record.hydrating; return; }
-  record.hydrating = (async () => {
+  const p = (async () => {
     if (typeof JSZip === 'undefined') throw new Error('JSZip 라이브러리를 불러오지 못했습니다.');
     await yieldToBrowser();
     const archive = await JSZip.loadAsync(record.file);
@@ -2002,10 +2008,17 @@ async function hydrateArchiveRecord(record) {
       if (!episodes[ep]) continue;
       episodes[ep].sort((a, b) => getEntryPath(a).localeCompare(getEntryPath(b), undefined, { numeric: true, sensitivity: 'base' }));
     }
-    record.hydrated = true; record.hydrating = null;
+    record.hydrated = true;
     renderList();
   })();
-  try { await record.hydrating; } finally { record.hydrating = null; }
+  record.hydrating = p;
+  try {
+    await p;
+  } catch(e) {
+    console.error('hydrateArchiveRecord 실패:', record.name, e);
+  } finally {
+    record.hydrating = null;
+  }
 }
 
 function trimHydratedArchives(activeIndex) {
@@ -2080,7 +2093,7 @@ function renderList() {
 async function loadEp(ep, pair=0, options={}) {
   const { preserveMode=false, page=null, restoreWebtoonPage=false } = options;
   const token = ++episodeLoadToken;
-  releaseEpisodeUrls();
+  // URL 해제를 새 화 렌더 직전으로 미룸 (즉시 해제하면 로딩 중인 이미지가 검정화면이 됨)
   if (appMode === 'webtoon') curMode = 'webtoon';
   else if (!preserveMode) { const sv = getCurrentProgress(); if (sv?.mode) curMode = sv.mode; }
   if (curEp !== null) document.getElementById(`ei-${curEp}`)?.classList.remove('active');
@@ -2090,6 +2103,8 @@ async function loadEp(ep, pair=0, options={}) {
   const ready = await ensureEpisodeReady(ep);
   if (token !== episodeLoadToken) return;
   if (!ready) { showToast(`${ep}화 파일을 찾을 수 없어요`); return; }
+  // 새 화가 준비된 시점에 이전 URL 해제 (이 시점은 새 렌더 직전이라 안전)
+  releaseEpisodeUrls();
   if (curMode === 'spread') {
     await ensureEpisodeSpreadLayout(ep);
     if (token !== episodeLoadToken) return;
@@ -2176,7 +2191,11 @@ function renderWebtoonReader(startEp, options={}) {
   void ensureEpisodeReady(startEp).then(ready => {
     if (!ready || curMode!=='webtoon' || curEp!==startEp) return;
     webtoonStack.innerHTML='';
-    renderWebtoonEpisodeBlock(startEp); pruneWebtoonEpisodeBlocks();
+    // DOM에 아직 없을 때만 렌더 (ensureEpisodeReady가 오래 걸린 경우 대비)
+    if (!document.getElementById(`wi-${startEp}`)) {
+      renderWebtoonEpisodeBlock(startEp);
+    }
+    pruneWebtoonEpisodeBlocks();
     if (restoreWebtoonPage) requestAnimationFrame(() => scrollToWebtoonPage(startEp, page, 'auto'));
     resetWebtoonNextGate();
   });
@@ -2267,13 +2286,11 @@ async function loadWebtoonFrame(frame, ep, page) {
       delete frame.dataset.loading;
     };
     img.onerror = () => {
-      // 로드 실패 시 플래그 제거 → 다음 번에 재시도 가능
+      // 로드 실패 시 플래그 완전 제거 → 1초 후 재시도
       delete frame.dataset.loading;
       frame.classList.remove('loaded');
-      // 1초 후 재시도
       setTimeout(() => {
-        if (frame.isConnected && !frame.classList.contains('loaded')) {
-          frame.dataset.loading = '0'; // 재시도 허용 표시
+        if (frame.isConnected && !frame.classList.contains('loaded') && !frame.dataset.loading) {
           loadWebtoonFrame(frame, ep, page);
         }
       }, 1000);
@@ -2287,10 +2304,10 @@ async function loadWebtoonFrame(frame, ep, page) {
 }
 
 function unloadWebtoonFrame(frame) {
-  const ep   = +frame.dataset.ep;
-  const activeEps = webtoonRenderedEpisodes;
-  const minEp = Math.min(...activeEps) - WEBTOON_EPISODE_KEEP_BEHIND;
-  const maxEp = Math.max(...activeEps) + WEBTOON_EPISODE_KEEP_AHEAD;
+  const ep = +frame.dataset.ep;
+  if (!webtoonRenderedEpisodes.length) return;
+  const minEp = Math.min(...webtoonRenderedEpisodes) - WEBTOON_EPISODE_KEEP_BEHIND;
+  const maxEp = Math.max(...webtoonRenderedEpisodes) + WEBTOON_EPISODE_KEEP_AHEAD;
   if (ep < minEp || ep > maxEp) {
     const img = frame.querySelector('img');
     if (img) {
@@ -2298,7 +2315,6 @@ function unloadWebtoonFrame(frame) {
       img.onerror = null;
       img.src = '';
     }
-    // 플래그 완전 초기화 → 재진입 시 재로드 가능
     frame.classList.remove('loaded');
     delete frame.dataset.loading;
   }
@@ -2311,17 +2327,37 @@ function scheduleWebtoonProgress() {
 
 function updateWebtoonProgress() {
   if (!webtoonVisible.size) return;
-  let maxPage=-1, dominantEp=curEp;
+  // 화면에 보이는 프레임 중 스크롤 기준으로 가장 "현재"인 것을 찾음:
+  // 같은 ep 내에서는 page가 클수록 더 아래 = 더 많이 읽은 것
+  // ep가 바뀌는 경계에서는, 이전 ep의 마지막 페이지보다 다음 ep가 화면을 더 차지할 때만 전환
+  let bestEp = curEp, bestPage = -1;
+  // 먼저 현재 ep의 최대 페이지 파악
   webtoonVisible.forEach(({ep, page}) => {
-    if (page > maxPage || (page===maxPage && ep===curEp)) { maxPage=page; dominantEp=ep; }
+    if (ep === curEp && page > bestPage) { bestPage = page; bestEp = ep; }
   });
-  if (dominantEp && maxPage > 0) {
-    if (dominantEp !== curEp) {
+  // 현재 ep 페이지가 없으면 전체 중 가장 많이 보이는 ep/page
+  if (bestPage < 0) {
+    webtoonVisible.forEach(({ep, page}) => {
+      if (page > bestPage || (page === bestPage && ep > bestEp)) { bestPage = page; bestEp = ep; }
+    });
+  } else {
+    // 다음 ep가 보이고 현재 ep의 마지막 페이지도 보이는 경우:
+    // 다음 ep 페이지가 현재 ep 최대 페이지보다 화면에 더 많이 있으면 전환
+    const curEpFiles = episodes[curEp]?.length || 0;
+    if (bestPage >= curEpFiles) {
+      // 현재 ep 마지막 페이지 → 다음 ep로 전환 허용
+      webtoonVisible.forEach(({ep, page}) => {
+        if (ep > bestEp) { bestEp = ep; bestPage = page; }
+      });
+    }
+  }
+  if (bestEp && bestPage > 0) {
+    if (bestEp !== curEp) {
       document.getElementById(`ei-${curEp}`)?.classList.remove('active');
-      curEp = dominantEp;
+      curEp = bestEp;
       document.getElementById(`ei-${curEp}`)?.classList.add('active');
     }
-    curPage = maxPage;
+    curPage = bestPage;
     updateHUD(); saveCurrentProgress();
   }
 }
@@ -2332,28 +2368,43 @@ function scheduleWebtoonPrefetch(ep) {
     webtoonAppendRaf = 0;
     for (let i=1; i<=WEBTOON_AUTOPREFETCH_AHEAD; i++) {
       const nextEp = epKeys[epKeys.indexOf(ep)+i];
-      if (!nextEp || webtoonAutoloaded.has(nextEp)) continue;
+      if (!nextEp) continue;
+      // DOM에 이미 있으면 절대 중복 추가 금지
+      if (document.getElementById(`wi-${nextEp}`)) {
+        webtoonAutoloaded.add(nextEp);
+        if (!webtoonRenderedEpisodes.includes(nextEp)) webtoonRenderedEpisodes.push(nextEp);
+        continue;
+      }
+      if (webtoonAutoloaded.has(nextEp)) continue;
       const ready = await ensureEpisodeReady(nextEp);
       if (!ready) continue;
-      if (!webtoonAutoloaded.has(nextEp) && !document.getElementById(`wi-${nextEp}`)) {
+      // await 후 다시 체크 (비동기 중 다른 경로로 추가됐을 수 있음)
+      if (webtoonAutoloaded.has(nextEp) || document.getElementById(`wi-${nextEp}`)) {
         webtoonAutoloaded.add(nextEp);
-        if (!webtoonRenderedEpisodes.includes(nextEp)) {
-          webtoonRenderedEpisodes.push(nextEp);
-          renderWebtoonEpisodeBlock(nextEp);
-          pruneWebtoonEpisodeBlocks();
-        }
+        if (!webtoonRenderedEpisodes.includes(nextEp)) webtoonRenderedEpisodes.push(nextEp);
+        continue;
+      }
+      webtoonAutoloaded.add(nextEp);
+      if (!webtoonRenderedEpisodes.includes(nextEp)) {
+        webtoonRenderedEpisodes.push(nextEp);
+        renderWebtoonEpisodeBlock(nextEp);
+        pruneWebtoonEpisodeBlocks();
       }
     }
   });
 }
 
 function pruneWebtoonEpisodeBlocks() {
+  if (!webtoonRenderedEpisodes.length) return;
   const blocks = webtoonStack.querySelectorAll('.episode-block');
-  const minEp = curEp - WEBTOON_EPISODE_KEEP_BEHIND;
-  const maxEp = curEp + WEBTOON_EPISODE_KEEP_AHEAD;
+  const minRendered = Math.min(...webtoonRenderedEpisodes);
+  const maxRendered = Math.max(...webtoonRenderedEpisodes);
+  // curEp 기준이 아닌 현재 렌더된 범위 기준으로 정리
+  const minKeep = minRendered - WEBTOON_EPISODE_KEEP_BEHIND;
+  const maxKeep = maxRendered + WEBTOON_EPISODE_KEEP_AHEAD;
   blocks.forEach(block => {
     const ep = +block.dataset.ep;
-    if (ep < minEp || ep > maxEp) {
+    if (ep < minKeep || ep > maxKeep) {
       block.remove();
       const idx = webtoonRenderedEpisodes.indexOf(ep);
       if (idx > -1) webtoonRenderedEpisodes.splice(idx, 1);
@@ -2371,6 +2422,12 @@ function handleWebtoonScroll() {
 }
 
 function markWebtoonGateInput() { webtoonGateInputSeen=true; }
+function handleWebtoonGateRelease() {
+  if (webtoonGateTriggered && !webtoonLoadingNext) {
+    webtoonLoadingNext = true;
+    loadNextEpisode();
+  }
+}
 
 function resetWebtoonNextGate() {
   webtoonGateArmed=false; webtoonGateTriggered=false; webtoonGateInputSeen=false;
@@ -2397,8 +2454,8 @@ function getCurrentSpreadLastPage() {
 
 function loadNextEpisode() {
   const idx = epKeys.indexOf(curEp);
-  if (idx < epKeys.length-1) loadEp(epKeys[idx+1], 0, { preserveMode:true });
-  else handleEnd();
+  if (idx < epKeys.length-1) { webtoonLoadingNext=false; loadEp(epKeys[idx+1], 0, { preserveMode:true }); }
+  else { webtoonLoadingNext=false; handleEnd(); }
 }
 function loadPrevEpisode(force=false) {
   const idx = epKeys.indexOf(curEp);
@@ -2471,11 +2528,21 @@ function updateHUD() {
 /* ════════════════════════════════════════════════════════
    SPREAD LAYOUT
 ════════════════════════════════════════════════════════ */
+let episodeSpreadLayoutPending = new Map(); // ep → Promise (진행 중 중복 방지)
+
 async function ensureEpisodeSpreadLayout(ep) {
   if (episodeSpreadCache.has(ep)) return;
+  if (episodeSpreadLayoutPending.has(ep)) { await episodeSpreadLayoutPending.get(ep); return; }
   const files = episodes[ep]; if (!files?.length) return;
-  const metas = await Promise.all(files.map(f => ensureImageMeta(f)));
-  episodeSpreadCache.set(ep, metas);
+  const p = Promise.all(files.map(f => ensureImageMeta(f))).then(metas => {
+    episodeSpreadCache.set(ep, metas);
+    episodeSpreadLayoutPending.delete(ep);
+  }).catch(e => {
+    episodeSpreadLayoutPending.delete(ep);
+    throw e;
+  });
+  episodeSpreadLayoutPending.set(ep, p);
+  await p;
 }
 
 function getSpreads(files, ep) {
@@ -2515,8 +2582,9 @@ async function setImageSource(img, file, token) {
   try {
     const url = await ensureObjectUrl(file);
     if (token !== spreadRenderToken) return;
+    img.onload  = () => { if (token===spreadRenderToken) img.classList.add('ready'); };
+    img.onerror = () => { img.classList.remove('ready'); console.warn('spread image load failed:', file?.name||file?.entryName); };
     img.src = url;
-    img.onload = () => { if (token===spreadRenderToken) img.classList.add('ready'); };
   } catch(e) { console.warn(e); }
 }
 
@@ -2725,7 +2793,7 @@ function toggleFirstSingleHUD() {
   if (curMode!=='spread') return;
   firstSingleInput.checked=!firstSingleInput.checked;
   saveFirstSingle(firstSingleInput.checked); syncFirstSingleHUD();
-  episodeSpreadCache=new Map();
+  episodeSpreadCache=new Map(); episodeSpreadLayoutPending=new Map();
   if (curEp) void ensureEpisodeSpreadLayout(curEp).then(() => { curPair=pageToPair(curEp,curPage); drawSpread(); });
 }
 async function toggleFullscreen(enabled) {
