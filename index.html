@@ -946,12 +946,12 @@
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
       #050505;
-    transition: opacity 0.26s ease, transform 0.26s ease;
+    transition: opacity 0.22s ease;
   }
 
   #webtoon-reader.switching {
     opacity: 0;
-    transform: translateY(18px);
+    transform: none;
   }
 
   .webtoon-stack {
@@ -2469,27 +2469,28 @@ function renderWebtoonReader(startEp, options = {}) {
   webtoonGateArmed = false;
   webtoonGateInputSeen = false;
   webtoonStack.innerHTML = '';
+  webtoonReader.scrollTop = 0;
   resetWebtoonNextGate();
 
   void ensureEpisodeReady(startEp).then(ready => {
     if (!ready || curMode !== 'webtoon' || curEp !== startEp) return;
     webtoonStack.innerHTML = '';
-    renderWebtoonEpisodeBlock(startEp);
-    pruneWebtoonEpisodeBlocks();
-    if (restoreWebtoonPage) {
-      requestAnimationFrame(() => scrollToWebtoonPage(startEp, page, 'auto'));
+    webtoonReader.scrollTop = 0;
+    if (restoreWebtoonPage && page > 1) {
+      renderWebtoonEpisodeBlockFrom(startEp, page);
+    } else {
+      renderWebtoonEpisodeBlock(startEp);
     }
+    pruneWebtoonEpisodeBlocks();
     resetWebtoonNextGate();
+    requestAnimationFrame(() => {
+      webtoonReader.classList.remove('switching');
+    });
   });
   observeWebtoonSentinel();
   updateHUD();
   saveCurrentProgress();
   renderList();
-
-  requestAnimationFrame(() => {
-    webtoonReader.scrollTop = 0;
-    webtoonReader.classList.remove('switching');
-  });
 }
 
 function renderWebtoonEpisodeBlock(ep) {
@@ -2533,6 +2534,97 @@ function renderWebtoonEpisodeBlock(ep) {
   webtoonStack.appendChild(block);
   observeWebtoonImages(block);
   pruneWebtoonEpisodeBlocks();
+}
+
+// 이어보기 전용: 목표 페이지 이미지를 먼저 eager load하고 즉시 스크롤,
+// 나머지는 기존 lazy 방식으로 렌더링
+function renderWebtoonEpisodeBlockFrom(ep, targetPage) {
+  const files = episodes[ep];
+  if (!files || !files.length) {
+    renderWebtoonEpisodeBlock(ep);
+    return;
+  }
+
+  // 파일 인덱스와 page 번호 매핑 미리 계산
+  const pageToIndex = new Map();
+  files.forEach((file, i) => {
+    const pg = extractPageNumber(file.name) || i + 1;
+    pageToIndex.set(pg, i);
+  });
+
+  // 목표 인덱스 결정 (page 번호가 없으면 targetPage - 1 fallback)
+  const targetIdx = pageToIndex.has(targetPage)
+    ? pageToIndex.get(targetPage)
+    : Math.max(0, targetPage - 1);
+
+  const block = document.createElement('section');
+  block.className = 'episode-block';
+  block.dataset.ep = String(ep);
+  block.innerHTML = appMode === 'webtoon'
+    ? '<div class="webtoon-images"></div>'
+    : `
+      <div class="episode-head">
+        <div class="episode-title">${ep}화</div>
+        <div class="episode-meta">${files.length} pages</div>
+      </div>
+      <div class="webtoon-images"></div>
+    `;
+
+  const imagesWrap = block.querySelector('.webtoon-images');
+
+  // 모든 프레임을 생성 (lazy)
+  const allFrames = files.map((file, i) => {
+    const pg = extractPageNumber(file.name) || i + 1;
+    const frame = document.createElement('div');
+    frame.className = 'webtoon-frame';
+    frame.dataset.ep = String(ep);
+    frame.dataset.page = String(pg);
+    frame.innerHTML = '<img alt="">';
+    const img = frame.querySelector('img');
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img._file = file;
+    return frame;
+  });
+
+  // 목표 프레임과 그 주변(앞 2장 + 뒤 3장)은 eager로 즉시 로드
+  const eagerFrom = Math.max(0, targetIdx - 2);
+  const eagerTo = Math.min(files.length - 1, targetIdx + 3);
+
+  allFrames.forEach((frame, i) => {
+    if (i >= eagerFrom && i <= eagerTo) {
+      frame.querySelector('img').loading = 'eager';
+    }
+    imagesWrap.appendChild(frame);
+  });
+
+  webtoonStack.appendChild(block);
+
+  // 목표 프레임을 eager load하고 준비되면 즉시 스크롤
+  const targetFrame = allFrames[targetIdx];
+  if (targetFrame) {
+    const img = targetFrame.querySelector('img');
+    const file = img._file;
+    targetFrame.dataset.loading = '1';
+    ensureObjectUrl(file).then(url => {
+      if (!targetFrame.isConnected) return;
+      const doScroll = () => {
+        targetFrame.scrollIntoView({ block: 'start', behavior: 'auto' });
+        targetFrame.classList.add('loaded');
+        targetFrame.dataset.loading = '0';
+      };
+      img.onload = doScroll;
+      img.onerror = () => {
+        targetFrame.scrollIntoView({ block: 'start', behavior: 'auto' });
+        targetFrame.dataset.loading = '0';
+      };
+      img.src = url;
+      // 이미 캐시돼 있으면 onload가 안 뜰 수 있으므로 체크
+      if (img.complete && img.naturalHeight > 0) doScroll();
+    });
+  }
+
+  observeWebtoonImages(block);
 }
 
 function observeWebtoonImages(block) {
@@ -2747,6 +2839,19 @@ function scrollToWebtoonPage(ep, page, behavior = 'smooth') {
   target.scrollIntoView({ block: 'start', behavior });
 }
 
+function scrollToWebtoonPageWithRetry(ep, page, attempts = 0) {
+  const maxAttempts = 30;
+  const target = webtoonStack.querySelector(`.webtoon-frame[data-ep="${ep}"][data-page="${page}"]`);
+  if (target) {
+    // 프레임을 찾았으면 즉시 스크롤, 이미지가 아직 로드 중이어도 위치는 잡혀 있음
+    target.scrollIntoView({ block: 'start', behavior: 'auto' });
+    return;
+  }
+  if (attempts < maxAttempts) {
+    setTimeout(() => scrollToWebtoonPageWithRetry(ep, page, attempts + 1), 50);
+  }
+}
+
 function highlightEpisodeItem(ep) {
   document.querySelectorAll('.ep-item.active').forEach(el => el.classList.remove('active'));
   document.getElementById(`ei-${ep}`)?.classList.add('active');
@@ -2824,7 +2929,7 @@ function loadWebtoonEpisodeWithTransition(ep, page = 1) {
   webtoonReader.classList.add('switching');
   hideNav();
   setTimeout(() => {
-    loadEp(ep, 0, { preserveMode: true, page, restoreWebtoonPage: true });
+    loadEp(ep, 0, { preserveMode: true, page, restoreWebtoonPage: page > 1 });
   }, 180);
 }
 
