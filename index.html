@@ -267,9 +267,13 @@
   .home-grid-wrap {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow-y: scroll;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    /* iOS 모멘텀 스크롤 + GPU 가속 */
+    transform: translateZ(0);
+    will-change: scroll-position;
     padding: 20px 16px calc(20px + var(--safe-bottom));
   }
 
@@ -308,11 +312,13 @@
   }
 
   .work-thumb img {
+    position: absolute; inset: 0;
     width: 100%; height: 100%;
     object-fit: cover;
     display: block;
     opacity: 0;
     transition: opacity 0.3s ease;
+    z-index: 2;
   }
   .work-thumb img.loaded { opacity: 1; }
 
@@ -322,10 +328,15 @@
     align-items: center; justify-content: center;
     gap: 8px;
     background: linear-gradient(135deg, rgba(255,107,53,0.08), rgba(73,187,255,0.06));
+    transition: opacity 0.3s ease;
+    z-index: 1;
   }
   .work-thumb-placeholder svg {
     opacity: 0.35;
   }
+  /* 썸네일 이미지 로드되면 placeholder 뒤로 */
+  .work-thumb img.loaded ~ .work-thumb-placeholder,
+  .work-thumb.has-thumb .work-thumb-placeholder { opacity: 0; pointer-events: none; }
   .work-thumb .progress-bar-mini {
     position: absolute;
     bottom: 0; left: 0; right: 0;
@@ -867,11 +878,11 @@
     position: relative; min-height: 220px; border-radius: 18px; overflow: hidden;
     background: #111;
     border: 1px solid rgba(255,255,255,0.05);
-    /* 레이아웃 재계산 최소화 */
     contain: layout style;
   }
   body.app-mode-webtoon .webtoon-frame {
-    min-height: 0; border: none; border-radius: 0; overflow: visible; background: transparent;
+    /* 웹툰 모드: 이미지 실제 크기로 높이 결정, 로드 전 placeholder 높이 설정 */
+    min-height: 300px; border: none; border-radius: 0; overflow: visible; background: transparent;
     contain: none;
   }
   /* 스켈레톤 애니메이션 제거 - iOS 스크롤 렉의 주요 원인 */
@@ -1294,11 +1305,12 @@ const OPFS_ROOT_DIR       = 'manga_library';          // OPFS 루트 디렉토�
 const DEFAULT_CLOUD_CONFIG = { apiKey:'', authDomain:'', projectId:'', appId:'' };
 const FILE_PROCESS_CHUNK         = 250;
 const LARGE_SELECTION_THRESHOLD  = 4000;
-const WEBTOON_UNLOAD_DISTANCE    = 1000; // 화면 위아래 1000px만 로드
-const WEBTOON_EPISODE_KEEP_BEHIND= 0;
-const WEBTOON_EPISODE_KEEP_AHEAD = 3;
-const WEBTOON_AUTOPREFETCH_AHEAD = 2;
-const ARCHIVE_NEIGHBORHOOD       = 0;
+const WEBTOON_UNLOAD_DISTANCE    = 1500; // 화면 위아래 1500px만 로드 (더 여유있게)
+const WEBTOON_EPISODE_KEEP_BEHIND= 0;    // 뒤 에피소드는 DOM에서 즉시 제거
+const WEBTOON_EPISODE_KEEP_AHEAD = 1;    // 앞 에피소드 1화만 미리 렌더 (3→1 RAM 절감)
+const WEBTOON_AUTOPREFETCH_AHEAD = 1;    // 1화만 미리 로드 (2→1 RAM 절감)
+const ARCHIVE_NEIGHBORHOOD       = 0;    // 현재 화 ZIP만 오픈 유지
+const MAX_OBJECTURL_CACHE        = 60;   // objectUrl 캐시 최대 개수 (넘으면 오래된 것 해제)
 
 // 현재 뷰어 상태
 let episodes = {};
@@ -1313,7 +1325,8 @@ let currentMangaTitle = '';
 let navOn = false, navTimer = null, toastTimer = null;
 let spreadRenderToken = 0, episodeLoadToken = 0;
 
-let objectUrlCache      = new Map();
+let objectUrlCache      = new Map(); // file → { url, promise, lruOrder }
+let objectUrlLruCounter = 0;        // LRU 순서 카운터
 let activeObjectUrls    = new Set();
 let imageMetaCache      = new Map();
 let episodeSpreadCache  = new Map();
@@ -1464,27 +1477,50 @@ async function handleFolderSelected(e) {
 
       const workDir = await libDir.getDirectoryHandle(work.name, { create: true });
 
-      // zip 파일들 복사
+      // zip 파일들 복사 (이미 존재하면 건너뜀)
       for (const f of work.zipFiles) {
+        let skip = false;
         try {
-          const fh = await workDir.getFileHandle(f.name, { create: true });
-          const writable = await fh.createWritable();
-          await writable.write(await f.arrayBuffer());
-          await writable.close();
-        } catch (err) { console.warn('파일 복사 실패:', f.name, err); }
+          // 같은 이름 파일이 이미 있는지 확인
+          const existing = await workDir.getFileHandle(f.name, { create: false }).catch(() => null);
+          if (existing) {
+            const existFile = await existing.getFile();
+            if (existFile.size === f.size) skip = true; // 크기 같으면 동일 파일로 간주
+          }
+        } catch (err) {}
+
+        if (!skip) {
+          try {
+            const fh = await workDir.getFileHandle(f.name, { create: true });
+            const writable = await fh.createWritable();
+            await writable.write(await f.arrayBuffer());
+            await writable.close();
+          } catch (err) { console.warn('파일 복사 실패:', f.name, err); }
+        }
         copied++;
         setCopyProgress(Math.round((copied / totalFiles) * 100));
         await yieldToBrowser();
       }
 
-      // 썸네일 복사
+      // 썸네일 복사 (이미 존재하면 건너뜀)
       if (work.thumbnail) {
+        let skipThumb = false;
         try {
-          const th = await workDir.getFileHandle(work.thumbnail.name, { create: true });
-          const tw = await th.createWritable();
-          await tw.write(await work.thumbnail.arrayBuffer());
-          await tw.close();
+          const existing = await workDir.getFileHandle(work.thumbnail.name, { create: false }).catch(() => null);
+          if (existing) {
+            const existFile = await existing.getFile();
+            if (existFile.size === work.thumbnail.size) skipThumb = true;
+          }
         } catch (err) {}
+
+        if (!skipThumb) {
+          try {
+            const th = await workDir.getFileHandle(work.thumbnail.name, { create: true });
+            const tw = await th.createWritable();
+            await tw.write(await work.thumbnail.arrayBuffer());
+            await tw.close();
+          } catch (err) {}
+        }
         copied++;
         setCopyProgress(Math.round((copied / totalFiles) * 100));
       }
@@ -1670,9 +1706,13 @@ async function loadThumbnail(fileHandle, index) {
     const thumb = document.getElementById(`wthumb-${index}`);
     if (!thumb) return;
     const img = document.createElement('img');
-    img.onload  = () => { img.classList.add('loaded'); };
+    img.onload = () => {
+      img.classList.add('loaded');
+      thumb.classList.add('has-thumb');
+    };
     img.onerror = () => { URL.revokeObjectURL(url); };
     img.src = url;
+    // placeholder 위로(DOM 앞에) img 삽입 → z-index로 img가 위에 표시됨
     thumb.insertBefore(img, thumb.firstChild);
   } catch (e) {}
 }
@@ -1704,7 +1744,12 @@ function selectWork(index) {
     selectedWork.thumbnail.getFile().then(file => {
       const url = URL.createObjectURL(file);
       const img = document.createElement('img');
-      img.onload = () => thumbEl.innerHTML = '', thumbEl.appendChild(img);
+      img.onload = () => {
+        thumbEl.innerHTML = '';
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;';
+        thumbEl.appendChild(img);
+      };
+      img.onerror = () => URL.revokeObjectURL(url);
       img.src = url;
     }).catch(() => {});
   }
@@ -2151,7 +2196,7 @@ function renderWebtoonEpisodeBlock(ep) {
   files.forEach((file, idx) => {
     const frame = document.createElement('div');
     frame.className = 'webtoon-frame'; frame.dataset.ep=ep; frame.dataset.page=idx+1;
-    const img = document.createElement('img'); img.alt=''; img.loading='lazy';
+    const img = document.createElement('img'); img.alt=''; img.decoding='async';
     frame.appendChild(img); container.appendChild(frame);
     const obs = getWebtoonObserver();
     obs.observe(frame);
@@ -2167,14 +2212,17 @@ function getWebtoonObserver() {
       const page  = +frame.dataset.page;
       if (entry.isIntersecting) {
         webtoonVisible.set(frame, { ep, page });
-        loadWebtoonFrame(frame, ep, page);
+        // loaded 상태가 아니면(unload 후 재진입 포함) 무조건 재시도
+        if (!frame.classList.contains('loaded')) {
+          delete frame.dataset.loading; // 혹시 남은 플래그 제거
+          loadWebtoonFrame(frame, ep, page);
+        }
         scheduleWebtoonPrefetch(ep);
       } else {
         webtoonVisible.delete(frame);
         unloadWebtoonFrame(frame);
       }
     }
-    // progress는 배치로 한 번만
     scheduleWebtoonProgress();
   }, { root: webtoonReader, rootMargin: `${WEBTOON_UNLOAD_DISTANCE}px 0px`, threshold: 0 });
   return webtoonObserver;
@@ -2196,32 +2244,61 @@ function disconnectWebtoonObservers() {
 }
 
 async function loadWebtoonFrame(frame, ep, page) {
-  if (frame.dataset.loading || frame.classList.contains('loaded')) return;
+  // 이미 로드 완료된 경우 스킵
+  if (frame.classList.contains('loaded')) return;
+  // 이미 로딩 중인 경우 스킵 (중복 방지)
+  if (frame.dataset.loading === '1') return;
   frame.dataset.loading = '1';
   try {
     const files = episodes[ep];
     const file  = files?.[page-1];
-    if (!file) return;
+    if (!file) { delete frame.dataset.loading; return; }
+
     const url = await ensureObjectUrl(file);
-    if (!frame.isConnected) return;
+
+    // 비동기 대기 중 frame이 DOM에서 제거됐거나 스크롤로 해제됐을 때 중단
+    if (!frame.isConnected) { delete frame.dataset.loading; return; }
+
     const img = frame.querySelector('img');
-    if (!img) return;
-    img.onload = () => frame.classList.add('loaded');
+    if (!img) { delete frame.dataset.loading; return; }
+
+    img.onload = () => {
+      frame.classList.add('loaded');
+      delete frame.dataset.loading;
+    };
+    img.onerror = () => {
+      // 로드 실패 시 플래그 제거 → 다음 번에 재시도 가능
+      delete frame.dataset.loading;
+      frame.classList.remove('loaded');
+      // 1초 후 재시도
+      setTimeout(() => {
+        if (frame.isConnected && !frame.classList.contains('loaded')) {
+          frame.dataset.loading = '0'; // 재시도 허용 표시
+          loadWebtoonFrame(frame, ep, page);
+        }
+      }, 1000);
+    };
     img.src = url;
   } catch(e) {
+    // 어떤 오류든 플래그 제거해서 재시도 가능하게
     delete frame.dataset.loading;
+    console.warn('webtoon frame load error:', e);
   }
 }
 
 function unloadWebtoonFrame(frame) {
   const ep   = +frame.dataset.ep;
-  const page = +frame.dataset.page;
   const activeEps = webtoonRenderedEpisodes;
   const minEp = Math.min(...activeEps) - WEBTOON_EPISODE_KEEP_BEHIND;
   const maxEp = Math.max(...activeEps) + WEBTOON_EPISODE_KEEP_AHEAD;
   if (ep < minEp || ep > maxEp) {
     const img = frame.querySelector('img');
-    if (img) { img.src=''; img.onload=null; }
+    if (img) {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    }
+    // 플래그 완전 초기화 → 재진입 시 재로드 가능
     frame.classList.remove('loaded');
     delete frame.dataset.loading;
   }
@@ -2445,23 +2522,68 @@ async function setImageSource(img, file, token) {
 
 async function ensureObjectUrl(file) {
   const cached = objectUrlCache.get(file);
-  if (cached?.url) { activeObjectUrls.add(cached.url); return cached.url; }
-  if (cached?.promise) { const url=await cached.promise; activeObjectUrls.add(url); return url; }
+  if (cached?.url) {
+    // LRU 순서 갱신
+    cached.lruOrder = ++objectUrlLruCounter;
+    activeObjectUrls.add(cached.url);
+    return cached.url;
+  }
+  if (cached?.promise) {
+    try {
+      const url = await cached.promise;
+      activeObjectUrls.add(url);
+      return url;
+    } catch(e) {
+      // 이전 promise가 실패한 경우 캐시 제거 후 재시도
+      objectUrlCache.delete(file);
+    }
+  }
   const promise = (async () => {
-    let url='';
-    if (file?.kind==='zip') {
+    let url = '';
+    if (file?.kind === 'zip') {
       const archive = await ensureZipArchiveOpen(file.archiveId);
       const entry   = archive?.file(file.entryName);
       if (!entry) throw new Error(`ZIP entry not found: ${file.entryName}`);
       const blob = await entry.async('blob');
       url = URL.createObjectURL(blob);
-    } else { url = URL.createObjectURL(file); }
+    } else {
+      url = URL.createObjectURL(file);
+    }
     activeObjectUrls.add(url);
-    objectUrlCache.set(file, { url, promise:null });
+    objectUrlCache.set(file, { url, promise: null, lruOrder: ++objectUrlLruCounter });
+    // 캐시 상한선 초과 시 LRU 순으로 오래된 항목 해제
+    if (objectUrlCache.size > MAX_OBJECTURL_CACHE) {
+      trimObjectUrlCache();
+    }
     return url;
   })();
-  objectUrlCache.set(file, { url:null, promise });
+  // promise 등록 전에 실패하면 캐시에서 제거
+  promise.catch(() => objectUrlCache.delete(file));
+  objectUrlCache.set(file, { url: null, promise, lruOrder: objectUrlLruCounter });
   return promise;
+}
+
+// 오래된 objectUrl 캐시 항목 해제 (현재 화면에 보이는 frame의 URL은 보존)
+function trimObjectUrlCache() {
+  // 현재 webtoonVisible에 있는 frame의 파일 참조 수집 (보호 대상)
+  const protectedFiles = new Set();
+  if (curMode === 'webtoon') {
+    webtoonVisible.forEach(({ ep, page }) => {
+      const file = episodes[ep]?.[page - 1];
+      if (file) protectedFiles.add(file);
+    });
+  }
+  // LRU 순으로 정렬, 보호 대상이 아닌 것부터 제거
+  const entries = [...objectUrlCache.entries()]
+    .filter(([file, cached]) => cached?.url && !protectedFiles.has(file))
+    .sort((a, b) => (a[1].lruOrder || 0) - (b[1].lruOrder || 0));
+
+  const toRemove = entries.slice(0, Math.max(0, objectUrlCache.size - MAX_OBJECTURL_CACHE + 10));
+  for (const [file, cached] of toRemove) {
+    URL.revokeObjectURL(cached.url);
+    activeObjectUrls.delete(cached.url);
+    objectUrlCache.delete(file);
+  }
 }
 
 async function ensureZipArchiveOpen(archiveId) {
@@ -2517,8 +2639,29 @@ function releaseObjectUrl(file) {
   if (cached?.url) { URL.revokeObjectURL(cached.url); objectUrlCache.delete(file); activeObjectUrls.delete(cached.url); }
 }
 function releaseEpisodeUrls() {
-  activeObjectUrls.forEach(url => URL.revokeObjectURL(url));
-  activeObjectUrls.clear(); objectUrlCache.clear();
+  // 웹툰 모드에서 현재 화면에 보이는 이미지 URL은 revoke하지 않음 (검은 화면 방지)
+  const protectedUrls = new Set();
+  if (curMode === 'webtoon') {
+    webtoonVisible.forEach(({ ep, page }) => {
+      const file = episodes[ep]?.[page - 1];
+      if (file) {
+        const cached = objectUrlCache.get(file);
+        if (cached?.url) protectedUrls.add(cached.url);
+      }
+    });
+  }
+  activeObjectUrls.forEach(url => {
+    if (!protectedUrls.has(url)) URL.revokeObjectURL(url);
+  });
+  activeObjectUrls.clear();
+  // 캐시에서도 보호된 URL 제외하고 제거
+  for (const [file, cached] of [...objectUrlCache.entries()]) {
+    if (cached?.url && protectedUrls.has(cached.url)) {
+      activeObjectUrls.add(cached.url); // 보호 URL은 active 유지
+    } else {
+      objectUrlCache.delete(file);
+    }
+  }
 }
 
 /* ════════════════════════════════════════════════════════
