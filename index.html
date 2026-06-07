@@ -2305,9 +2305,15 @@ async function loadWebtoonFrame(frame, ep, page) {
 
 function unloadWebtoonFrame(frame) {
   const ep = +frame.dataset.ep;
-  if (!webtoonRenderedEpisodes.length) return;
-  const minEp = Math.min(...webtoonRenderedEpisodes) - WEBTOON_EPISODE_KEEP_BEHIND;
-  const maxEp = Math.max(...webtoonRenderedEpisodes) + WEBTOON_EPISODE_KEEP_AHEAD;
+  let minEp, maxEp;
+  if (appMode === 'webtoon') {
+    minEp = curEp - WEBTOON_EPISODE_KEEP_BEHIND;
+    maxEp = curEp; // 게이트 방식: 현재 화 프레임만 유지
+  } else {
+    if (!webtoonRenderedEpisodes.length) return;
+    minEp = Math.min(...webtoonRenderedEpisodes) - WEBTOON_EPISODE_KEEP_BEHIND;
+    maxEp = Math.max(...webtoonRenderedEpisodes) + WEBTOON_EPISODE_KEEP_AHEAD;
+  }
   if (ep < minEp || ep > maxEp) {
     const img = frame.querySelector('img');
     if (img) {
@@ -2369,7 +2375,13 @@ function scheduleWebtoonPrefetch(ep) {
     for (let i=1; i<=WEBTOON_AUTOPREFETCH_AHEAD; i++) {
       const nextEp = epKeys[epKeys.indexOf(ep)+i];
       if (!nextEp) continue;
-      // DOM에 이미 있으면 절대 중복 추가 금지
+
+      // app-mode-webtoon: 게이트 방식 → 자동 렌더 및 ZIP 선로드 금지
+      if (appMode === 'webtoon') {
+        continue;
+      }
+
+      // 일반 웹툰 모드: 기존 자동 렌더 로직
       if (document.getElementById(`wi-${nextEp}`)) {
         webtoonAutoloaded.add(nextEp);
         if (!webtoonRenderedEpisodes.includes(nextEp)) webtoonRenderedEpisodes.push(nextEp);
@@ -2378,7 +2390,6 @@ function scheduleWebtoonPrefetch(ep) {
       if (webtoonAutoloaded.has(nextEp)) continue;
       const ready = await ensureEpisodeReady(nextEp);
       if (!ready) continue;
-      // await 후 다시 체크 (비동기 중 다른 경로로 추가됐을 수 있음)
       if (webtoonAutoloaded.has(nextEp) || document.getElementById(`wi-${nextEp}`)) {
         webtoonAutoloaded.add(nextEp);
         if (!webtoonRenderedEpisodes.includes(nextEp)) webtoonRenderedEpisodes.push(nextEp);
@@ -2397,11 +2408,17 @@ function scheduleWebtoonPrefetch(ep) {
 function pruneWebtoonEpisodeBlocks() {
   if (!webtoonRenderedEpisodes.length) return;
   const blocks = webtoonStack.querySelectorAll('.episode-block');
-  const minRendered = Math.min(...webtoonRenderedEpisodes);
-  const maxRendered = Math.max(...webtoonRenderedEpisodes);
-  // curEp 기준이 아닌 현재 렌더된 범위 기준으로 정리
-  const minKeep = minRendered - WEBTOON_EPISODE_KEEP_BEHIND;
-  const maxKeep = maxRendered + WEBTOON_EPISODE_KEEP_AHEAD;
+  let minKeep, maxKeep;
+  if (appMode === 'webtoon') {
+    // 게이트 방식: 현재 화만 유지
+    minKeep = curEp - WEBTOON_EPISODE_KEEP_BEHIND;
+    maxKeep = curEp + 0; // 다음 화 블록은 게이트 통과 후에만 추가됨
+  } else {
+    const minRendered = Math.min(...webtoonRenderedEpisodes);
+    const maxRendered = Math.max(...webtoonRenderedEpisodes);
+    minKeep = minRendered - WEBTOON_EPISODE_KEEP_BEHIND;
+    maxKeep = maxRendered + WEBTOON_EPISODE_KEEP_AHEAD;
+  }
   blocks.forEach(block => {
     const ep = +block.dataset.ep;
     if (ep < minKeep || ep > maxKeep) {
@@ -2414,6 +2431,7 @@ function pruneWebtoonEpisodeBlocks() {
 
 function handleWebtoonScroll() {
   scheduleWebtoonProgress();
+  if (appMode !== 'webtoon') return;
   if (!webtoonGateArmed && webtoonGateInputSeen) {
     const near = webtoonReader.scrollHeight - webtoonReader.scrollTop - webtoonReader.clientHeight < 600;
     if (near) { webtoonGateArmed=true; updateWebtoonNextGate(); }
@@ -2423,6 +2441,7 @@ function handleWebtoonScroll() {
 
 function markWebtoonGateInput() { webtoonGateInputSeen=true; }
 function handleWebtoonGateRelease() {
+  if (appMode !== 'webtoon') return;
   if (webtoonGateTriggered && !webtoonLoadingNext) {
     webtoonLoadingNext = true;
     loadNextEpisode();
