@@ -752,18 +752,19 @@
     width: 100%; height: 100%;
     display: flex; align-items: center;
     justify-content: center; overflow: hidden;
+    flex-direction: row-reverse;
   }
   #pg-right, #pg-left { width: 50%; height: 100%; display: flex; align-items: center; overflow: hidden; }
-  #pg-right { justify-content: flex-end; }
-  #pg-left  { justify-content: flex-start; }
+  #pg-right { justify-content: flex-start; }
+  #pg-left  { justify-content: flex-end; }
   #pg-right img, #pg-left img {
     max-width: 100%; max-height: 100%;
     object-fit: contain; display: block;
     opacity: 0; transition: opacity 0.24s;
   }
   #pg-right img.ready, #pg-left img.ready { opacity: 1; }
-  #pg-right img { transform-origin: right bottom; transform: scale(var(--img-scale)); }
-  #pg-left  img { transform-origin: left  bottom; transform: scale(var(--img-scale)); }
+  #pg-right img { transform-origin: left bottom; transform: scale(var(--img-scale)); }
+  #pg-left  img { transform-origin: right bottom; transform: scale(var(--img-scale)); }
   #spread.single #pg-right { width: 100%; justify-content: center; }
   #spread.single #pg-right img { transform-origin: center bottom; }
   #spread.single #pg-left  { display: none; }
@@ -2560,9 +2561,9 @@ function getSpreads(files, ep) {
     if (meta.orientation==='landscape') { spreads.push({ right:files[i], left:null, pages:[i+1] }); i++; continue; }
     const nextMeta = metas[i+1];
     if (files[i+1] && nextMeta?.orientation!=='landscape') {
-  // right에 뒤 페이지(i+1)를, left에 앞 페이지(i)를 할당합니다.
-  spreads.push({ right:files[i+1], left:files[i], pages:[i+1,i+2] }); i+=2;
-} else {
+      spreads.push({ right:files[i], left:files[i+1], pages:[i+1,i+2] }); i+=2;
+    } else { spreads.push({ right:files[i], left:null, pages:[i+1] }); i++; }
+  }
   return spreads;
 }
 
