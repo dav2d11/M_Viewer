@@ -2560,9 +2560,9 @@ function getSpreads(files, ep) {
     if (meta.orientation==='landscape') { spreads.push({ right:files[i], left:null, pages:[i+1] }); i++; continue; }
     const nextMeta = metas[i+1];
     if (files[i+1] && nextMeta?.orientation!=='landscape') {
-      spreads.push({ right:files[i], left:files[i+1], pages:[i+1,i+2] }); i+=2;
-    } else { spreads.push({ right:files[i], left:null, pages:[i+1] }); i++; }
-  }
+  // right에 뒤 페이지(i+1)를, left에 앞 페이지(i)를 할당합니다.
+  spreads.push({ right:files[i+1], left:files[i], pages:[i+1,i+2] }); i+=2;
+} else {
   return spreads;
 }
 
