@@ -1894,6 +1894,8 @@ function renderWebtoonEpisodeBlock(ep) {
   block.innerHTML = `<div class="episode-head"><div class="episode-title">${ep}화</div><div class="episode-meta">${files.length}p</div></div><div class="webtoon-images" id="wi-${ep}"></div>`;
   webtoonStack.appendChild(block);
   const container = block.querySelector('.webtoon-images');
+  
+  // 1. 반복문으로 빈 액자(frame)를 만듭니다.
   files.forEach((file, idx) => {
     const frame = document.createElement('div');
     frame.className = 'webtoon-frame'; frame.dataset.ep=ep; frame.dataset.page=idx+1;
@@ -1901,19 +1903,18 @@ function renderWebtoonEpisodeBlock(ep) {
     frame.appendChild(img); container.appendChild(frame);
     const obs = getWebtoonObserver();
     obs.observe(frame);
-    
-
   });
-    setTimeout(() => {
+
+  // 2. 반복문이 끝난 뒤, 백그라운드에서 다음 10장을 미리 캐싱합니다.
+  setTimeout(() => {
     const prefetchLimit = Math.min(files.length, 10);
     for (let i = 0; i < prefetchLimit; i++) {
       if (files[i]) {
-        fetch(files[i].url).catch(() => {}); // 서비스 워커가 가로채서 다운로드해둠
+        fetch(files[i].url).catch(() => {});
       }
     }
   }, 500);
 }
-
 function getWebtoonObserver() {
   if (webtoonObserver) return webtoonObserver;
   webtoonObserver = new IntersectionObserver(entries => {
