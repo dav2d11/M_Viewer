@@ -1311,7 +1311,7 @@ const OPFS_ROOT_DIR       = 'manga_library';
 const DEFAULT_CLOUD_CONFIG = { apiKey:'', authDomain:'', projectId:'', appId:'' };
 const FILE_PROCESS_CHUNK         = 250;
 const LARGE_SELECTION_THRESHOLD  = 4000;
-const WEBTOON_UNLOAD_DISTANCE    = 600;  // [최적화] 1500 -> 600: 화면 밖 DOM 로드 범위 축소
+const WEBTOON_UNLOAD_DISTANCE    = 3000;  // [최적화] 1500 -> 600: 화면 밖 DOM 로드 범위 축소
 const WEBTOON_EPISODE_KEEP_BEHIND= 0;    
 const WEBTOON_EPISODE_KEEP_AHEAD = 1;    
 const WEBTOON_AUTOPREFETCH_AHEAD = 1;    
@@ -1901,6 +1901,15 @@ function renderWebtoonEpisodeBlock(ep) {
     frame.appendChild(img); container.appendChild(frame);
     const obs = getWebtoonObserver();
     obs.observe(frame);
+    setTimeout(() => {
+    // 다음 10장의 이미지를 백그라운드에서 미리 캐싱 요청합니다.
+    const prefetchLimit = Math.min(files.length, 10);
+    for (let i = 0; i < prefetchLimit; i++) {
+      if (files[i]) {
+        fetch(files[i].url).catch(() => {}); // 서비스 워커가 가로채서 다운로드해둠
+      }
+    }
+  }, 500);
   });
 }
 
