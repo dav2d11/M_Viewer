@@ -1572,23 +1572,29 @@ async function startReading(mode) {
     epKeys           = [];
     episodePaths     = {};
 
-    // 1. 선택한 작품의 하위 폴더(회차 폴더) 목록 가져오기
-    const xml = await webdavPropfind(selectedWork.webdavPath, 1);
-    const responses = xml.getElementsByTagNameNS("*", "response");
+// 1. 선택한 작품의 하위 폴더(회차 폴더) 목록 가져오기
+const xml = await webdavPropfind(selectedWork.webdavPath, 1);
+const responses = xml.getElementsByTagNameNS("*", "response");
 
-    for (let i = 1; i < responses.length; i++) {
-      const href = responses[i].getElementsByTagNameNS("*", "href")[0].textContent;
-      if (responses[i].getElementsByTagNameNS("*", "collection").length > 0) {
-        const folderName = decodeURIComponent(href).split('/').filter(Boolean).pop();
-        // 폴더명에서 숫자 추출 (예: '001화' -> 1)
-        const match = folderName.match(/\d+/);
-        if (match) {
-          const epNum = parseInt(match[0], 10);
-          epKeys.push(epNum);
-          episodePaths[epNum] = href;
-        }
-      }
+for (let i = 1; i < responses.length; i++) {
+  const href = responses[i].getElementsByTagNameNS("*", "href")[0].textContent;
+  if (responses[i].getElementsByTagNameNS("*", "collection").length > 0) {
+    const folderName = decodeURIComponent(href).split('/').filter(Boolean).pop();
+    
+    // 'episode_' 뒤의 숫자를 찾거나, 없으면 문자열 맨 마지막에 위치한 숫자를 추출합니다.
+    let match = folderName.match(/episode_(\d+)/i);
+    if (!match) {
+      match = folderName.match(/\d+(?=\D*$)/); 
     }
+
+    if (match) {
+      // 정규식 그룹(match[1])이 있으면 그것을, 없으면 전체 매치(match[0])를 사용
+      const epNum = parseInt(match[1] || match[0], 10);
+      epKeys.push(epNum);
+      episodePaths[epNum] = href;
+    }
+  }
+}
 
     epKeys.sort((a, b) => a - b); // 숫자 순 오름차순 정렬
 
