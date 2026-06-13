@@ -1266,7 +1266,7 @@
 <script>
 // 서비스 워커 등록
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
+  navigator.serviceWorker.register('sw.js')
     .then(reg => {
       console.log('서비스 워커 등록 완료');
       // 이미 등록 완료된 컨트롤러가 있다면 자격증명을 전송하도록 처리
