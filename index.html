@@ -1901,8 +1901,10 @@ function renderWebtoonEpisodeBlock(ep) {
     frame.appendChild(img); container.appendChild(frame);
     const obs = getWebtoonObserver();
     obs.observe(frame);
+    
+
+  });
     setTimeout(() => {
-    // 다음 10장의 이미지를 백그라운드에서 미리 캐싱 요청합니다.
     const prefetchLimit = Math.min(files.length, 10);
     for (let i = 0; i < prefetchLimit; i++) {
       if (files[i]) {
@@ -1910,7 +1912,6 @@ function renderWebtoonEpisodeBlock(ep) {
       }
     }
   }, 500);
-  });
 }
 
 function getWebtoonObserver() {
