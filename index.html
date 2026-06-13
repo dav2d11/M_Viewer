@@ -1477,18 +1477,36 @@ function renderHomeScreen() {
 }
 
 async function loadThumbnail(work, index) {
-  try {
-    const res = await fetch(ncConfig.url + work.thumbnail, { headers: { 'Authorization': ncConfig.authHeader } });
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const thumb = document.getElementById(`wthumb-${index}`);
-    if (!thumb) return;
-    const img = document.createElement('img');
-    img.onload = () => { img.classList.add('loaded'); URL.revokeObjectURL(url); };
-    img.src = url;
-    thumb.appendChild(img);
-  } catch(e) {}
+  // 찾아볼 썸네일 확장자 목록
+  const extensions = ['jpg', 'jpeg', 'png', 'webp'];
+  
+  for (const ext of extensions) {
+    try {
+      // 서버에 해당 확장자가 있는지 요청해봄
+      const testUrl = `${ncConfig.url}${work.webdavPath}thumbnail.${ext}`;
+      const res = await fetch(testUrl, { headers: { 'Authorization': ncConfig.authHeader } });
+      
+      // 파일이 존재한다면 (성공)
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const thumb = document.getElementById(`wthumb-${index}`);
+        if (!thumb) return;
+        
+        const img = document.createElement('img');
+        img.onload = () => { img.classList.add('loaded'); URL.revokeObjectURL(url); };
+        img.src = url;
+        thumb.appendChild(img);
+        
+        // 중요: 찾아낸 진짜 확장자 경로를 작품 정보에 덮어씀 (클릭했을 때 바텀시트에서도 띄우기 위함)
+        work.thumbnail = `${work.webdavPath}thumbnail.${ext}`;
+        
+        return; // 성공했으니 더 이상 다른 확장자는 찾지 않고 반복문 탈출!
+      }
+    } catch(e) {
+      // 에러가 나면 다음 확장자로 넘어감
+    }
+  }
 }
 
 
@@ -1682,23 +1700,26 @@ function hashString(input) {
 function renderList() {
   const progressStore = readProgressStore();
   const currentProgress = progressStore[currentMangaId] || null;
+  
   document.getElementById('ep-list').innerHTML = epKeys.map(ep => {
-    const files = episodes[ep];
+    // 핵심 방어코드: 아직 사진 목록을 못 가져왔으면 빈 배열([])로 처리하여 length 에러 방지
+    const files = episodes[ep] || []; 
     const episodePageCount = files.length;
-    const isPending = !episodePageCount && zipArchives.some(r => ep >= r.startEp && ep <= r.endEp);
+    
     const saved = currentProgress && currentProgress.ep === ep ? currentProgress : null;
     const percent = saved && episodePageCount
       ? Math.min(100, Math.round(((saved.mode === 'webtoon' ? saved.page : spreadToLastPage(ep, saved.pair||0)) / episodePageCount) * 100))
       : null;
+      
     return `
       <div class="ep-item ${curEp===ep?'active':''}" id="ei-${ep}" onclick="loadEp(${ep},0)">
         <div class="ep-main">
           <span class="ep-label">${ep}화</span>
-          <span class="ep-sub">${saved?`${saved.mode==='webtoon'?`${saved.page}p`:`${saved.pair+1}컷`} 이어보기`:(isPending?'근처 화에서 열림':'준비됨')}</span>
+          <span class="ep-sub">${saved ? (saved.mode==='webtoon' ? `${saved.page}p` : `${saved.pair+1}컷`) + ' 이어보기' : (episodePageCount ? '준비됨' : '대기중')}</span>
         </div>
         <div class="ep-meta">
-          <span class="ep-pages">${episodePageCount?`${episodePageCount}p`:(isPending?'대기':'0p')}</span>
-          ${percent!==null?`<span class="ep-prog">${percent}%</span>`:''}
+          <span class="ep-pages">${episodePageCount ? `${episodePageCount}p` : '대기중'}</span>
+          ${percent !== null ? `<span class="ep-prog">${percent}%</span>` : ''}
         </div>
       </div>`;
   }).join('');
