@@ -1895,7 +1895,6 @@ function renderWebtoonEpisodeBlock(ep) {
   webtoonStack.appendChild(block);
   const container = block.querySelector('.webtoon-images');
   
-  // 1. 반복문으로 빈 액자(frame)를 만듭니다.
   files.forEach((file, idx) => {
     const frame = document.createElement('div');
     frame.className = 'webtoon-frame'; frame.dataset.ep=ep; frame.dataset.page=idx+1;
@@ -1905,17 +1904,18 @@ function renderWebtoonEpisodeBlock(ep) {
     obs.observe(frame);
   });
 
-  // 2. 반복문이 끝난 뒤, 백그라운드에서 다음 10장을 미리 캐싱합니다.
   setTimeout(() => {
     const prefetchLimit = Math.min(files.length, 10);
     for (let i = 0; i < prefetchLimit; i++) {
       if (files[i]) {
-        fetch(files[i].url).catch(() => {});
+        // [수정] 프리페치(미리받기) 할 때도 꼬리표를 붙여줍니다.
+        fetch(files[i].url + '?auth=' + encodeURIComponent(ncConfig.authHeader)).catch(() => {});
       }
     }
   }, 500);
-}
-function getWebtoonObserver() {
+
+
+}function getWebtoonObserver() {
   if (webtoonObserver) return webtoonObserver;
   webtoonObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
@@ -1956,7 +1956,6 @@ async function loadWebtoonFrame(frame, ep, page) {
     const files = episodes[ep];
     const file  = files?.[page-1];
     if (!file) { delete frame.dataset.loading; return; }
-
     if (!frame.isConnected) { delete frame.dataset.loading; return; }
 
     const img = frame.querySelector('img');
@@ -1969,19 +1968,16 @@ async function loadWebtoonFrame(frame, ep, page) {
     img.onerror = () => {
       delete frame.dataset.loading;
       frame.classList.remove('loaded');
-      setTimeout(() => {
-        if (frame.isConnected && !frame.classList.contains('loaded') && !frame.dataset.loading) {
-          loadWebtoonFrame(frame, ep, page);
-        }
-      }, 1000);
+      // [수정] 무한 렉을 유발하던 1초 뒤 재시도 코드를 완전히 삭제했습니다.
     };
-    img.src = file.url;
+    
+    // [수정] 꼬리표(?auth=)를 붙여서 서비스 워커에 토스합니다.
+    img.src = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
   } catch(e) {
     delete frame.dataset.loading;
     console.warn('webtoon frame load error:', e);
   }
 }
-
 function unloadWebtoonFrame(frame) {
   const ep = +frame.dataset.ep;
   let minEp, maxEp;
@@ -2324,10 +2320,10 @@ async function setImageSource(img, file, token) {
     if (token !== spreadRenderToken) return;
     img.onload  = () => { if (token===spreadRenderToken) img.classList.add('ready'); };
     img.onerror = () => { img.classList.remove('ready'); console.warn('spread image load failed:', file?.name||file?.entryName); };
-    img.src = file.url;
+    // [수정] 단행본(책) 모드에서도 꼬리표를 붙여줍니다.
+    img.src = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
   } catch(e) { console.warn(e); }
 }
-
 
 
 async function ensureImageMeta(file) {
