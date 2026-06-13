@@ -1507,25 +1507,23 @@ function selectWork(index) {
   const thumbEl= document.getElementById('mode-sheet-thumb');
 
   titleEl.textContent = selectedWork.name;
-  const ep = selectedWork.epRange;
-  epEl.textContent = ep
-    ? `${ep.start}화 ~ ${ep.end}화 (총 ${ep.count}화)`
-    : `${selectedWork.zipFiles.length}개 ZIP 파일`;
+  epEl.textContent = "클릭하여 회차를 불러옵니다";
 
   thumbEl.innerHTML = `<div class="mode-sheet-thumb-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`;
+  
   if (selectedWork.thumbnail) {
-    selectedWork.thumbnail.getFile().then(file => {
-      const url = URL.createObjectURL(file);
-      const img = document.createElement('img');
-      img.onload = () => {
-        thumbEl.innerHTML = '';
+    // 썸네일 이미지를 서버(WebDAV)에서 안전하게 다운로드
+    fetch(ncConfig.url + selectedWork.thumbnail, { headers: { 'Authorization': ncConfig.authHeader } })
+      .then(res => res.ok ? res.blob() : Promise.reject())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const img = document.createElement('img');
+        img.onload = () => URL.revokeObjectURL(url);
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;';
+        img.src = url;
+        thumbEl.innerHTML = '';
         thumbEl.appendChild(img);
-        URL.revokeObjectURL(url); 
-      };
-      img.onerror = () => URL.revokeObjectURL(url);
-      img.src = url;
-    }).catch(() => {});
+      }).catch(() => {});
   }
 
   sheet.classList.add('visible');
@@ -1536,50 +1534,9 @@ function closeModeSelect(e) {
   document.getElementById('mode-select').classList.remove('visible');
   selectedWork = null;
 }
+
 async function deleteSelectedWork() {
-  if (!selectedWork) return;
-  
-  if (!confirm(`'${selectedWork.name}' 작품을 완전히 삭제하시겠습니까?\nOPFS(브라우저 저장소)에 저장된 수 GB의 파일이 모두 지워지며 복구할 수 없습니다.`)) {
-    return;
-  }
-
-  try {
-    // 1. OPFS(실제 파일 저장소)에서 원본 폴더 및 파일 완전 삭제
-    const root = await navigator.storage.getDirectory();
-    const libDir = await root.getDirectoryHandle(OPFS_ROOT_DIR, { create: false });
-    await libDir.removeEntry(selectedWork.name, { recursive: true });
-    
-    // 2. 진행도 데이터 삭제 (로컬스토리지)
-    const mangaId = 'manga_' + hashString(selectedWork.name.trim().toLowerCase());
-    const localStore = readProgressStore();
-    if (localStore[mangaId]) {
-      delete localStore[mangaId];
-      writeProgressStore(localStore); // UI(보관함) 자동 갱신됨
-    }
-
-    // 3. 진행도 데이터 삭제 (클라우드가 연동되어 있는 경우 파이어베이스에서도 삭제)
-    if (remoteProgressStore && remoteProgressStore[mangaId]) {
-      delete remoteProgressStore[mangaId];
-    }
-    if (cloud.user && cloud.db) {
-      await cloud.db.collection('mangaProgress').doc(cloud.user.uid).update({
-        [`books.${mangaId}`]: firebase.firestore.FieldValue.delete(),
-        updatedAt: Date.now()
-      });
-    }
-
-    // 4. 현재 렌더링 된 리스트(worksList)에서 제거 후 모달 닫기
-    worksList = worksList.filter(w => w.name !== selectedWork.name);
-    closeModeSelect();
-    
-    // 5. 홈 화면 새로고침 (삭제된 작품이 격자에서 사라짐)
-    renderHomeScreen();
-    showToast('작품과 저장된 데이터가 모두 삭제되었습니다.');
-    
-  } catch (error) {
-    console.error('삭제 중 오류 발생:', error);
-    alert('작품 삭제에 실패했습니다: ' + error.message);
-  }
+  alert('서버 연동 모드에서는 뷰어에서 작품을 직접 삭제할 수 없습니다. Nextcloud에서 폴더를 직접 관리해 주세요.');
 }
 
 /* ════════════════════════════════════════════════════════
