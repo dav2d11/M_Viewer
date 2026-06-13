@@ -1057,7 +1057,6 @@
     </div>
     <div style="display: flex; gap: 10px; margin-top: 4px;">
       <button class="mode-cancel-btn" type="button" onclick="closeModeSelect()" style="flex: 1;">취소</button>
-      <button class="mode-delete-btn" type="button" onclick="deleteSelectedWork()" style="flex: 1;">작품 삭제</button>
     </div>
     </div>
 </div>
@@ -1553,9 +1552,6 @@ function closeModeSelect(e) {
   selectedWork = null;
 }
 
-async function deleteSelectedWork() {
-  alert('서버 연동 모드에서는 뷰어에서 작품을 직접 삭제할 수 없습니다. Nextcloud에서 폴더를 직접 관리해 주세요.');
-}
 
 /* ════════════════════════════════════════════════════════
    뷰어 진입
