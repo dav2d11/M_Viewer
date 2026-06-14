@@ -1390,7 +1390,6 @@ document.addEventListener('DOMContentLoaded', () => {
       connectNextcloud(true);
     } else {
       // 2. 처음이라 캐시가 없으면 스플래시 화면 띄우고 데이터 가져오기
-      document.getElementById('login-screen').style.display = 'none';
       document.getElementById('splash-screen').style.display = 'flex';
       connectNextcloud(true);
     }
@@ -1467,7 +1466,7 @@ async function connectNextcloud(isBackground = false) {
 
 function logoutNextcloud() { localStorage.removeItem(NC_STORE_KEY); location.reload(); }
 
-function renderHomeScreen() {
+async function renderHomeScreen() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('home-screen').classList.add('visible');
   
@@ -1478,7 +1477,6 @@ function renderHomeScreen() {
   grid.innerHTML = worksList.map((work, i) => {
     const mangaId = 'manga_' + hashString(work.name.trim().toLowerCase());
     const progress = progressStore[mangaId];
-    // 서버 환경에서는 전체 화수를 미리 알기 어려우므로 진행바는 최근 읽은 화수 표시로 대체
     const progressText = progress ? `최근: ${progress.ep}화` : `클릭하여 보기`;
 
     return `
@@ -1493,53 +1491,53 @@ function renderHomeScreen() {
       </div>`;
   }).join('');
 
-  worksList.forEach((work, i) => loadThumbnail(work, i));
+  // 모든 썸네일 로딩을 Promise 배열로 만들어 병렬로 처리 후 기다림
+  const thumbPromises = worksList.map((work, i) => loadThumbnail(work, i));
+  await Promise.allSettled(thumbPromises);
+
+  // 썸네일이 모두 확인(성공이든 실패든)된 후 스플래시 종료
+  document.getElementById('splash-screen').style.display = 'none';
 }
 
 function loadThumbnail(work, index) {
-  const thumb = document.getElementById(`wthumb-${index}`);
-  if (!thumb) return;
+  return new Promise((resolve) => {
+    const thumb = document.getElementById(`wthumb-${index}`);
+    if (!thumb) return resolve();
 
-  const img = document.createElement('img');
-  const extensions = ['jpg', 'png', 'jpeg', 'webp'];
-  let currentExtIndex = 0;
+    const img = document.createElement('img');
+    const extensions = ['jpg', 'png', 'jpeg', 'webp'];
+    let currentExtIndex = 0;
 
-  // 성공 시 작동할 함수 (캐시 업데이트 및 화면 표시)
-  img.onload = () => {
-    img.classList.add('loaded');
-    thumb.appendChild(img);
-    // 올바른 확장자를 찾았다면 캐시에 영구 저장하여 다음번엔 묻지도 따지지도 않고 바로 로드
-    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
-  };
+    img.onload = () => {
+      img.classList.add('loaded');
+      thumb.appendChild(img);
+      localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
+      resolve(); // 성공 시 Promise 완료
+    };
 
-  // 실패 시 다음 확장자로 찔러보기
-  img.onerror = () => {
-    currentExtIndex++;
-    if (currentExtIndex < extensions.length) {
+    img.onerror = () => {
+      currentExtIndex++;
+      if (currentExtIndex < extensions.length) {
+        tryLoadExtension();
+      } else {
+        resolve(); // 모든 확장자 실패 시에도 무한 대기 방지를 위해 완료 처리
+      }
+    };
+
+    const tryLoadExtension = () => {
+      const ext = extensions[currentExtIndex];
+      const path = `${work.webdavPath}thumbnail.${ext}`;
+      work.thumbnail = path;
+      img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+    };
+
+    if (work.thumbnail) {
+      img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+    } else {
       tryLoadExtension();
     }
-  };
-
-  const tryLoadExtension = () => {
-    const ext = extensions[currentExtIndex];
-    const path = `${work.webdavPath}thumbnail.${ext}`;
-    work.thumbnail = path; // 일단 경로를 임시 등록해봄
-    img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-  };
-
-  // 만약 이전에 찾아둔 정확한 확장자가 캐시에 있다면 바로 적용
-  if (work.thumbnail) {
-    img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-  } else {
-    // 없으면 가장 흔한 jpg부터 순서대로 때려맞추기 시작 (무거운 HEAD 통신 삭제)
-    tryLoadExtension();
-  }
+  });
 }
-
-function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 /* ════════════════════════════════════════════════════════
    작품 선택 → 모드 선택 바텀시트
 ════════════════════════════════════════════════════════ */
@@ -1711,17 +1709,22 @@ function renderList() {
   const currentProgress = progressStore[currentMangaId] || null;
   
   document.getElementById('ep-list').innerHTML = epKeys.map(ep => {
-    // 핵심 방어코드: 아직 사진 목록을 못 가져왔으면 빈 배열([])로 처리하여 length 에러 방지
     const files = episodes[ep] || []; 
     const episodePageCount = files.length;
-    
     const saved = currentProgress && currentProgress.ep === ep ? currentProgress : null;
     const percent = saved && episodePageCount
       ? Math.min(100, Math.round(((saved.mode === 'webtoon' ? saved.page : spreadToLastPage(ep, saved.pair||0)) / episodePageCount) * 100))
       : null;
       
+    // 저장된 기록이 있으면 해당 위치로, 없으면 0번부터 시작하도록 클릭 액션 동적 생성
+    const clickAction = saved 
+      ? (saved.mode === 'webtoon' 
+          ? `loadEp(${ep}, 0, { preserveMode: true, page: ${saved.page}, restoreWebtoonPage: true })` 
+          : `loadEp(${ep}, ${saved.pair || 0}, { preserveMode: true, page: ${saved.page || 1} })`)
+      : `loadEp(${ep}, 0)`;
+      
     return `
-      <div class="ep-item ${curEp===ep?'active':''}" id="ei-${ep}" onclick="loadEp(${ep},0)">
+      <div class="ep-item ${curEp===ep?'active':''}" id="ei-${ep}" onclick="${clickAction}">
           <div class="ep-main">
           <span class="ep-label">${ep}화</span>
           <span class="ep-sub">${saved ? (saved.mode==='webtoon' ? `${saved.page}p` : `${saved.pair+1}컷`) + ' 이어보기' : ''}</span>
@@ -2575,37 +2578,41 @@ async function preloadNextEpisodeBackground() {
   if (!curEp || !epKeys.length) return;
   const currentIndex = epKeys.indexOf(curEp);
   
-  // 마지막 화라면 미리 불러올 필요 없음
   if (currentIndex < 0 || currentIndex >= epKeys.length - 1) return;
 
   const nextEp = epKeys[currentIndex + 1];
 
-  // 이미 캐시(임시 저장소)에 다음 화 레이아웃이 계산되어 있다면 패스
   if (episodeSpreadCache.has(nextEp)) return;
 
   try {
-    // 1. 서버에서 다음 화 파일 목록(XML) 몰래 받아오기
     const isReady = await ensureEpisodeReady(nextEp);
     if (!isReady) return;
 
-    // 2. 만화 모드일 경우: 다음 화 전체 이미지의 가로세로 비율 몰래 계산해두기
-    // (이게 가장 병목이 심한 작업이라, 미리 해두면 다음 화 로딩이 1초 만에 끝납니다)
     if (curMode === 'spread') {
       await ensureEpisodeSpreadLayout(nextEp);
     }
 
-    // 3. 다음 화의 첫 1~3장 이미지를 브라우저 캐시에 몰래 다운로드
     const files = episodes[nextEp];
     if (files && files.length > 0) {
-      for (let i = 0; i < Math.min(3, files.length); i++) {
-        const prefetchImg = new Image();
-        prefetchImg.src = files[i].url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-      }
+      // RAM 과부하 방지: Image 객체를 생성하지 않고 fetch를 이용해 브라우저 디스크 캐시에만 저장
+      // 브라우저의 병렬 연결 제한을 고려하여 한 번에 너무 많은 요청이 가지 않도록 처리할 수도 있지만,
+      // 브라우저 자체가 우선순위를 낮춰서 백그라운드 처리해줍니다.
+      const fetchPromises = files.map(file => {
+        const fullUrl = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+        return fetch(fullUrl, { 
+          mode: 'cors', 
+          cache: 'force-cache',
+          // 중요: 다운로드 우선순위를 낮춰 현재 보고 있는 화면 버벅임을 방지 (일부 모던 브라우저 지원)
+          priority: 'low' 
+        }).catch(() => {}); // 실패해도 무시
+      });
+      
+      // 백그라운드에서 진행되므로 굳이 await로 기다릴 필요 없이 던져둡니다.
+      Promise.all(fetchPromises);
     }
   } catch (e) {
     console.warn('다음 화 미리 불러오기 실패:', e);
   }
-}
-</script>
+}</script>
 </body>
 </html>
