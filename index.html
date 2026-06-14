@@ -1472,33 +1472,89 @@ async function renderHomeScreen() {
   document.getElementById('home-screen').classList.add('visible');
   
   const grid = document.getElementById('home-grid');
-  const progressStore = readProgressStore();
-  if (!worksList.length) { grid.innerHTML = '<div class="home-empty">작품(하위 폴더)이 없습니다</div>'; return; }
+  if (!worksList.length) { 
+    grid.innerHTML = '<div class="home-empty">작품(하위 폴더)이 없습니다</div>'; 
+    return; 
+  }
 
-  grid.innerHTML = worksList.map((work, i) => {
-    const mangaId = 'manga_' + hashString(work.name.trim().toLowerCase());
-    const progress = progressStore[mangaId];
-    const progressText = progress ? `최근: ${progress.ep}화` : `클릭하여 보기`;
+  // 1. 기본 뼈대 DOM 생성
+  grid.innerHTML = worksList.map((work, i) => `
+    <div class="work-card" onclick="selectWork(${i})">
+      <div class="work-thumb" id="wthumb-${i}">
+        <div class="work-thumb-placeholder">📚</div>
+      </div>
+      <div class="work-info">
+        <div class="work-name">${escapeHtml(work.name)}</div>
+        <div class="work-ep-count"></div>
+      </div>
+    </div>`).join('');
 
-    return `
-      <div class="work-card" onclick="selectWork(${i})">
-        <div class="work-thumb" id="wthumb-${i}">
-          <div class="work-thumb-placeholder">📚</div>
-        </div>
-        <div class="work-info">
-          <div class="work-name">${escapeHtml(work.name)}</div>
-          <div class="work-ep-count">${progressText}</div>
-        </div>
-      </div>`;
-  }).join('');
+  // 2. CSS 속성(order)을 이용해 깔끔하게 카드 위치 재배열 및 텍스트 씌우기
+  updateGridOrderAndText();
 
-  // 모든 썸네일 로딩을 Promise 배열로 만들어 병렬로 처리 후 기다림
+  // 3. 썸네일 로딩
   const thumbPromises = worksList.map((work, i) => loadThumbnail(work, i));
   await Promise.allSettled(thumbPromises);
 
-  // 썸네일이 모두 확인(성공이든 실패든)된 후 스플래시 종료
+  // 4. 로딩 완료 시 스플래시 종료
   document.getElementById('splash-screen').style.display = 'none';
 }
+
+function updateGridOrderAndText() {
+  const progressStore = readProgressStore();
+  
+  // 1. 순서를 계산하기 위해 worksList의 인덱스와 진행도 데이터를 매핑
+  const orderData = worksList.map((work, index) => {
+    const mangaId = 'manga_' + hashString(work.name.trim().toLowerCase());
+    const prog = progressStore[mangaId];
+    
+    // 그룹 분류: 0 = 보고있는 것(진행중), 1 = 안 본 것, 2 = 다 본 것(완독)
+    const group = !prog ? 1 : (prog.isCompleted ? 2 : 0);
+    const updated = prog ? (prog.updatedAt || 0) : 0;
+    return { index, group, updated, name: work.name };
+  });
+
+  // 2. 정렬 규칙 적용 (그룹별 -> 최근 읽은 순 or 이름 순)
+  orderData.sort((a, b) => {
+    if (a.group !== b.group) return a.group - b.group; // 그룹 우선 정렬
+    if (a.group === 0 || a.group === 2) return b.updated - a.updated; // 진행중, 완독은 최근 읽은 순서대로
+    return a.name.localeCompare(b.name); // 안 본 작품은 이름(가나다) 순서대로
+  });
+
+  // 3. 정렬된 결과에 따라 원래 인덱스에 순위(order) 부여
+  const orderMapping = {};
+  orderData.forEach((data, rank) => { orderMapping[data.index] = rank; });
+
+  // 4. DOM을 파괴하지 않고 CSS 'order' 속성만 변경하여 시각적 순서 변경
+  worksList.forEach((work, i) => {
+    const card = document.querySelector(`.home-grid .work-card:nth-child(${i+1})`);
+    if (!card) return;
+    
+    card.style.order = orderMapping[i]; // 카드 순서 적용
+    
+    // 텍스트 및 UI 색상 갱신
+    const mangaId = 'manga_' + hashString(work.name.trim().toLowerCase());
+    const prog = progressStore[mangaId];
+    const epCountEl = card.querySelector('.work-ep-count');
+    
+    if (prog) {
+      if (prog.isCompleted) {
+        epCountEl.textContent = '완독 🎉';
+        epCountEl.style.color = 'var(--accent)';
+        epCountEl.style.fontWeight = '700';
+      } else {
+        epCountEl.textContent = `최근: ${prog.ep}화`;
+        epCountEl.style.color = 'var(--text-3)';
+        epCountEl.style.fontWeight = 'normal';
+      }
+    } else {
+      epCountEl.textContent = '클릭하여 보기';
+      epCountEl.style.color = 'var(--text-3)';
+      epCountEl.style.fontWeight = 'normal';
+    }
+  });
+}
+
 
 function loadThumbnail(work, index) {
   return new Promise((resolve) => {
@@ -1671,6 +1727,10 @@ function goHome() {
 
 function renderHomeGrid() {
   if (!worksList.length) return;
+  
+  // 뒤로가기(홈 화면으로 돌아왔을 때) 시점에도 순서 재정렬
+  updateGridOrderAndText(); 
+  
   const progressStore = readProgressStore();
   worksList.forEach((work, i) => {
     const card = document.querySelector(`.home-grid .work-card:nth-child(${i+1})`);
@@ -1692,7 +1752,6 @@ function renderHomeGrid() {
     }
   });
 }
-
 
 
 
@@ -2349,14 +2408,39 @@ function saveCurrentProgress() {
 function commitCurrentProgress() {
   if (!currentMangaId||!curEp) return null;
   const store = readProgressStore();
-  store[currentMangaId] = { mangaId:currentMangaId, title:currentMangaTitle, ep:curEp, pair:curPair, page:curPage, mode:curMode, updatedAt:Date.now(), deviceId, deviceLabel };
+  
+  // ▼ 완독 여부 판별 로직 추가 ▼
+  let isCompleted = false;
+  if (epKeys && epKeys.length > 0) {
+    const idx = epKeys.indexOf(curEp);
+    // 현재 읽고 있는 게 전체 회차 중 마지막 회차라면
+    if (idx === epKeys.length - 1) {
+      if (curMode === 'webtoon') {
+        const count = episodes[curEp]?.length || 0;
+        // 웹툰 모드: 현재 페이지가 전체 페이지 수보다 크거나 같으면 완독
+        if (count > 0 && curPage >= count) isCompleted = true;
+      } else {
+        const spreads = getSpreads(episodes[curEp], curEp);
+        // 만화 모드: 현재 컷(pair)이 전체 컷 수의 마지막이면 완독
+        if (spreads.length > 0 && curPair >= spreads.length - 1) isCompleted = true;
+      }
+    }
+  }
+
+  store[currentMangaId] = { 
+    mangaId:currentMangaId, 
+    title:currentMangaTitle, 
+    ep:curEp, 
+    pair:curPair, 
+    page:curPage, 
+    mode:curMode, 
+    updatedAt:Date.now(), 
+    deviceId, 
+    deviceLabel,
+    isCompleted // 판단된 완독 여부를 진행도에 함께 저장합니다
+  };
   writeProgressStore(store);
   return store[currentMangaId];
-}
-function flushCurrentProgress() { clearTimeout(saveProgressTimer); return commitCurrentProgress(); }
-function getResumeToast(progress) {
-  if (!progress) return '이어보기';
-  return progress.mode==='webtoon' ? `${progress.ep}화 ${progress.page}p 부터 이어보기` : `${progress.ep}화 ${progress.pair+1}컷 부터 이어보기`;
 }
 
 /* ════════════════════════════════════════════════════════
