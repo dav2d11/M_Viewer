@@ -1528,37 +1528,71 @@ const thumbnailObserver = new IntersectionObserver((entries, observer) => {
 });
 
 // ▼ 개별 썸네일 로딩 로직 ▼
-function loadThumbnailLazy(work, thumbEl, index) {
+// ▼ [변경] Cache Storage API를 사용하여 이미지 자체를 기기에 영구 캐싱합니다.
+async function loadThumbnailLazy(work, thumbEl, index) {
   const img = document.createElement('img');
   const extensions = ['jpg', 'png', 'jpeg', 'webp'];
-  let currentExtIndex = 0;
-
+  
+  // 1. 웹앱 전용 이미지 캐시 저장소 열기
+  const thumbnailCache = await caches.open('manga-thumbnails-v1');
+  
   img.onload = () => {
     img.classList.add('loaded');
     thumbEl.appendChild(img);
-    // 썸네일 경로를 찾았다면 캐시에 저장 (다음 번엔 확장자 탐색 없이 바로 로딩)
     localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
-  };
 
-  img.onerror = () => {
-    currentExtIndex++;
-    if (currentExtIndex < extensions.length) {
-      tryLoadExtension();
+    // ▼ [추가] 이미지가 로딩 완료되면 메모리에 물고 있던 Blob URL을 해제합니다.
+    if (img.src.startsWith('blob:')) {
+      URL.revokeObjectURL(img.src);
     }
   };
 
-  const tryLoadExtension = () => {
-    const ext = extensions[currentExtIndex];
-    const path = `${work.webdavPath}thumbnail.${ext}`;
-    work.thumbnail = path;
-    img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-  };
-
-  // 이전에 저장해둔 썸네일 경로가 있다면 바로 로딩, 없으면 탐색 시작
+  // 2. 이미 성공했던 확장자 정보가 로컬스토리지에 저장되어 있는 경우
   if (work.thumbnail) {
-    img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-  } else {
-    tryLoadExtension();
+    const fullUrl = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+    
+    try {
+      // 기기 캐시 저장소에서 먼저 이미지가 있는지 확인
+      const cachedResponse = await thumbnailCache.match(fullUrl);
+      if (cachedResponse) {
+        const blob = await cachedResponse.blob();
+        img.src = URL.createObjectURL(blob); // 캐시에서 찾으면 0초만에 즉시 로딩
+        return;
+      }
+      
+      // 캐시에 없다면 네트워크에서 다운로드 후 캐시에 저장
+      const res = await fetch(fullUrl);
+      if (res.ok) {
+        await thumbnailCache.put(fullUrl, res.clone()); // 캐시에 물리 파일 저장
+        const blob = await res.blob();
+        img.src = URL.createObjectURL(blob);
+        return;
+      }
+    } catch (e) {
+      console.warn("캐시 로딩 실패, 재탐색 진행:", e);
+    }
+  }
+
+  // 3. 캐시가 없거나 처음 방문한 작품인 경우: 확장자를 순회하며 이미지 찾기
+  for (const ext of extensions) {
+    const path = `${work.webdavPath}thumbnail.${ext}`;
+    const fullUrl = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+    
+    try {
+      const res = await fetch(fullUrl);
+      if (res.ok) {
+        work.thumbnail = path; // 올바른 확장자 기억
+        
+        // 기기 캐시 저장소에 이 이미지 파일(Response)을 통째로 저장
+        await thumbnailCache.put(fullUrl, res.clone());
+        
+        const blob = await res.blob();
+        img.src = URL.createObjectURL(blob);
+        return; // 이미지를 찾았으므로 루프 종료
+      }
+    } catch (e) {
+      // 에러 발생 시(파일 없음 등) 다음 확장자로 자연스럽게 넘어감
+    }
   }
 }
 
