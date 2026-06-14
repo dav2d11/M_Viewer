@@ -1164,9 +1164,9 @@
     <div id="webtoon-reader">
       <div class="webtoon-stack" id="webtoon-stack"></div>
       <div class="sentinel" id="webtoon-sentinel"></div>
-        <div id="webtoon-next-gate" style="padding: 40px 20px 80px; text-align: center;">
-        <button class="copy-main-btn" type="button" onclick="loadNextEpisode()" style="max-width: 240px; margin: 0 auto; display: block;">다음 화 보기</button>
-      </div>  
+    <div id="webtoon-next-gate" style="padding: 40px 20px 80px; text-align: center;">
+      <button id="webtoon-gate-btn" class="copy-main-btn" type="button" onclick="handleGateClick()" style="max-width: 240px; margin: 0 auto; display: block;">다음화</button>
+    </div>  
     </div>
 
     <div class="zone" id="z-left"   onclick="tapLeft()"></div>
@@ -1455,10 +1455,13 @@ async function connectNextcloud(isBackground = false) {
     
     worksList = newWorksList;
     localStorage.setItem(NC_STORE_KEY, JSON.stringify(ncConfig));
-    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList)); // 캐시 저장
+    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList)); 
     
-    document.getElementById('splash-screen').style.display = 'none'; // 스플래시 종료
-    renderHomeScreen(); // 화면 갱신
+    // [수정] 이 위치에 있던 스플래시 강제 종료 코드를 삭제했습니다.
+    // [수정] 만화를 보는 도중 백그라운드 동기화가 일어나도 화면이 튕기지 않도록 방어합니다.
+    if (!isBackground || document.getElementById('home-screen').classList.contains('visible')) {
+      renderHomeScreen(); 
+    }
   } catch (err) {
     if (!isBackground) document.getElementById('login-status').textContent = '연결 실패: 주소나 앱 비밀번호를 확인하세요.';
     document.getElementById('splash-screen').style.display = 'none';
@@ -2064,21 +2067,6 @@ function getCurrentSpreadLastPage() {
 }
 
 function loadNextEpisode() {
-  // 1. 하단 게이트 버튼 피드백 처리
-  const nextGateBtn = document.querySelector('#webtoon-next-gate .copy-main-btn');
-  if (nextGateBtn) {
-    const originalText = nextGateBtn.textContent;
-    nextGateBtn.textContent = '불러오는 중...';
-    nextGateBtn.classList.add('btn-loading');
-    
-    // 0.6초 뒤에 원래 버튼 텍스트와 상태로 복구
-    setTimeout(() => {
-      nextGateBtn.textContent = originalText;
-      nextGateBtn.classList.remove('btn-loading');
-    }, 600);
-  }
-
-  // 2. 기존 다음 회차 로드 로직
   const idx = epKeys.indexOf(curEp);
   if (idx < epKeys.length - 1) { 
     webtoonLoadingNext = false; 
@@ -2086,6 +2074,22 @@ function loadNextEpisode() {
   } else { 
     webtoonLoadingNext = false; 
     handleEnd(); 
+  }
+}
+
+// 하단 게이트 버튼 클릭을 전담하는 함수
+function handleGateClick() {
+  const btn = document.getElementById('webtoon-gate-btn');
+  if (btn) {
+    btn.classList.add('btn-loading');
+    setTimeout(() => btn.classList.remove('btn-loading'), 600);
+  }
+  
+  const idx = epKeys.indexOf(curEp);
+  if (idx < epKeys.length - 1) {
+    loadNextEpisode();
+  } else {
+    handleEnd(); // 마지막 화면 완독 팝업을 띄웁니다
   }
 }
 function loadPrevEpisode(force=false) {
@@ -2102,10 +2106,18 @@ function handleEnd() {
   const endScreen = document.getElementById('end-screen');
   const idx = epKeys.indexOf(curEp);
   const isLast = idx === epKeys.length-1;
+  
   document.getElementById('end-title').textContent = isLast ? '완독!' : `${curEp}화 완료`;
   document.getElementById('end-sub').textContent = isLast
     ? `${currentMangaTitle}\n총 ${epKeys.length}화를 모두 읽었어요 🎉`
     : `다음 화로 계속하시겠어요?`;
+    
+  // ▼ 마지막 화일 경우 팝업창에서 '다음 화' 버튼을 아예 숨겨 무한루프를 차단합니다 ▼
+  const nextBtn = document.querySelector('#end-screen .end-btn.secondary');
+  if (nextBtn) {
+    nextBtn.style.display = isLast ? 'none' : 'inline-block';
+  }
+
   endScreen.classList.add('visible');
 }
 function closeEnd() { document.getElementById('end-screen').classList.remove('visible'); openSidebar(); setSidebarTab('episodes'); }
@@ -2151,6 +2163,13 @@ function updateHUD() {
   } else {
     const spreads = getSpreads(episodes[curEp], curEp);
     pageEl.textContent = spreads.length ? `${curPair+1}/${spreads.length}컷` : '';
+  }
+  
+  // ▼ 현재 화수에 따라 하단 버튼 텍스트를 동적으로 변경합니다 ▼
+  const gateBtn = document.getElementById('webtoon-gate-btn');
+  if (gateBtn) {
+    const isLast = epKeys.indexOf(curEp) === epKeys.length - 1;
+    gateBtn.textContent = isLast ? '완독 🎉' : '다음화';
   }
 }
 
