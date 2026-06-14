@@ -1014,12 +1014,16 @@
     </div>
     <div class="mode-sheet-title" id="mode-sheet-title">작품 제목</div>
     <div class="mode-sheet-ep"   id="mode-sheet-ep"></div>
-    <div class="mode-btns" style="grid-template-columns: 1fr;">
-      <button class="mode-btn" type="button" onclick="startReading('webtoon')">
-        <div class="mode-btn-icon">📱</div>
-        <div class="mode-btn-name">웹툰모드</div>
-      </button>
-    </div>
+    <div class="mode-btns" style="grid-template-columns: 1fr 1fr;">
+  <button class="mode-btn" type="button" onclick="startReading('spread')">
+    <div class="mode-btn-icon">📖</div>
+    <div class="mode-btn-name">만화모드</div>
+  </button>
+  <button class="mode-btn" type="button" onclick="startReading('webtoon')">
+    <div class="mode-btn-icon">📱</div>
+    <div class="mode-btn-name">웹툰모드</div>
+  </button>
+</div>
     </div>
 </div>
   </div>
@@ -1167,13 +1171,14 @@
     </div>
 
     <div id="hud">
-      <button class="hud-home-btn" onclick="goHome()" title="홈으로">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </button>
-      <span id="hud-title"></span>
-      <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
-      <button class="hud-btn" onclick="toggleSidebar()" title="메뉴">☰</button>
-    </div>
+  <button class="hud-home-btn" onclick="goHome()" title="홈으로">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+  </button>
+  <span id="hud-title"></span>
+  <span id="hud-page"></span>
+  <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
+  <button class="hud-btn" onclick="toggleSidebar()" title="메뉴">☰</button>
+</div>
 
     <div class="webtoon-ui-actions" id="webtoon-ui-actions">
       <button class="webtoon-ui-btn" type="button" onclick="loadPrevEpisode(true)">이전 화</button>
