@@ -971,6 +971,12 @@
     #hud-page { display: none; }
     .end-actions { flex-direction: column; }
   }
+
+  .btn-loading {
+    opacity: 0.6 !important;
+    pointer-events: none;
+    transform: scale(0.95);
+  }
 </style>
 </head>
 <body>
@@ -1054,11 +1060,12 @@
 
       <div class="sidebar-pages">
         <div class="sidebar-page settings-page active" id="sidebar-page-settings">
-            </div>
-          </div>
+
+
 
           <div class="section-box">
             <div class="section-title">View Controls</div>
+
             <div class="sb-controls">
               <button class="ghost-btn" onclick="loadPrevEpisode()">이전화</button>
               <button class="ghost-btn" onclick="loadNextEpisode()">다음화</button>
@@ -1107,6 +1114,7 @@
 
           <div class="section-box cloud-box">
             <div class="section-title">Cloud Sync</div>
+
             <div class="toggle-copy">
               <strong>기기간 진행도 공유</strong>
               <span>Firebase 프로젝트를 연결하면 iPhone, iPad, Mac에서 같은 계정으로 진행도를 동기화합니다.</span>
@@ -1132,6 +1140,8 @@
             <div class="cloud-note">프로젝트 설정은 한 번만 저장하면 이후에는 이메일과 비밀번호만 입력하면 됩니다.</div>
           </div>
         </div>
+
+      </div>
 
         <div class="sidebar-page episodes-page" id="sidebar-page-episodes">
           <div class="episodes-head">
@@ -2028,9 +2038,29 @@ function getCurrentSpreadLastPage() {
 }
 
 function loadNextEpisode() {
+  // 1. 하단 게이트 버튼 피드백 처리
+  const nextGateBtn = document.querySelector('#webtoon-next-gate .copy-main-btn');
+  if (nextGateBtn) {
+    const originalText = nextGateBtn.textContent;
+    nextGateBtn.textContent = '불러오는 중...';
+    nextGateBtn.classList.add('btn-loading');
+    
+    // 0.6초 뒤에 원래 버튼 텍스트와 상태로 복구
+    setTimeout(() => {
+      nextGateBtn.textContent = originalText;
+      nextGateBtn.classList.remove('btn-loading');
+    }, 600);
+  }
+
+  // 2. 기존 다음 회차 로드 로직
   const idx = epKeys.indexOf(curEp);
-  if (idx < epKeys.length-1) { webtoonLoadingNext=false; loadEp(epKeys[idx+1], 0, { preserveMode:true }); }
-  else { webtoonLoadingNext=false; handleEnd(); }
+  if (idx < epKeys.length - 1) { 
+    webtoonLoadingNext = false; 
+    loadEp(epKeys[idx + 1], 0, { preserveMode: true }); 
+  } else { 
+    webtoonLoadingNext = false; 
+    handleEnd(); 
+  }
 }
 function loadPrevEpisode(force=false) {
   const idx = epKeys.indexOf(curEp);
@@ -2179,10 +2209,6 @@ async function ensureEpisodeReady(ep) {
 
 function getEntryName(file) { return file?.name || ''; }
 function getEntryPath(file) { return file?.name || ''; }
-async function getEntryBlob(file) {
-  const res = await fetch(file.url, { headers: { 'Authorization': ncConfig.authHeader } });
-  return await res.blob();
-}
 
 
 
@@ -2202,31 +2228,35 @@ async function ensureImageMeta(file) {
   const cached = imageMetaCache.get(file);
   if (cached?.meta) return cached.meta;
   if (cached?.promise) return cached.promise;
-  const promise = (async () => {
-    const blob = await getEntryBlob(file);
-    const meta = await readImageMeta(blob);
+
+  const promise = new Promise((resolve) => {
+    const img = new Image();
+    
+    // 이미지가 로드되면 가로가 넓은지(양면), 세로가 긴지(단면) 판별
+    img.onload = () => {
+      resolve({ 
+        width: img.naturalWidth, 
+        height: img.naturalHeight, 
+        orientation: img.naturalWidth > img.naturalHeight ? 'landscape' : 'portrait' 
+      });
+    };
+    
+    // 로드에 실패하더라도 앱이 멈추지 않도록 기본 세로 모드로 간주하고 진행
+    img.onerror = () => {
+      resolve({ width:0, height:0, orientation:'portrait' });
+    };
+    
+    // 무거운 fetch 대신 브라우저 로딩 활용 (서비스 워커를 타도록 auth 꼬리표 부착)
+    img.src = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+  }).then(meta => {
     imageMetaCache.set(file, { meta, promise:null });
     return meta;
-  })();
+  });
+
   imageMetaCache.set(file, { meta:null, promise });
   return promise;
 }
 
-
-async function readImageMeta(blob) {
-  if (typeof createImageBitmap==='function') {
-    const bitmap = await createImageBitmap(blob);
-    const meta = { width:bitmap.width, height:bitmap.height, orientation:bitmap.width>bitmap.height?'landscape':'portrait' };
-    bitmap.close(); return meta;
-  }
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload  = () => { resolve({ width:img.naturalWidth, height:img.naturalHeight, orientation:img.naturalWidth>img.naturalHeight?'landscape':'portrait' }); URL.revokeObjectURL(url); };
-    img.onerror = () => { resolve({ width:0, height:0, orientation:'portrait' }); URL.revokeObjectURL(url); };
-    img.src = url;
-  });
-}
 
 /* ════════════════════════════════════════════════════════
    SIDEBAR / UI
