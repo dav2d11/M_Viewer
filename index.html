@@ -808,32 +808,6 @@
   body.app-mode-webtoon .pill-btn { font-size: 11px; }
   body.app-mode-webtoon .webtoon-stack { width: min(100%, 1080px); padding: 58px 0 0; }
 
-  .webtoon-next-gate {
-    display: none; min-height: 340px; padding: 42px 18px 70px;
-    background: #000; color: #fff; place-items: center; text-align: center;
-  }
-  body.app-mode-webtoon .webtoon-next-gate { display: grid; }
-  .next-gate-inner { display: grid; justify-items: center; gap: 16px; }
-  .next-gate-circle {
-    --gate-progress: 0deg;
-    width: 72px; height: 72px; border-radius: 50%;
-    display: grid; place-items: center;
-    background: conic-gradient(#fff var(--gate-progress), rgba(255,255,255,0.16) 0deg);
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 16px 40px rgba(0,0,0,0.46);
-    transition: background 0.08s linear, transform 0.18s;
-  }
-  .next-gate-circle::after {
-    content: ''; width: 44px; height: 44px; border-radius: 50%;
-    background: #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10);
-  }
-  .webtoon-next-gate.ready .next-gate-circle { transform: scale(1.08); }
-  .next-gate-label { min-height: 18px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.72); }
-  .next-gate-btn {
-    min-width: 132px; min-height: 42px;
-    border: 1px solid rgba(255,255,255,0.18); border-radius: 999px;
-    background: #fff; color: #000; font-size: 13px; font-weight: 800; cursor: pointer;
-  }
-
   .webtoon-ui-actions {
     position: absolute; left: 50%; bottom: 28px; z-index: 26;
     display: flex; gap: 10px;
@@ -863,13 +837,13 @@
   .webtoon-images { display: flex; flex-direction: column; gap: 10px; }
   body.app-mode-webtoon .webtoon-images { gap: 0; }
   .webtoon-frame {
-    position: relative; min-height: 220px; border-radius: 18px; overflow: hidden;
+  position: relative; border-radius: 18px; overflow: hidden;
     background: #111;
     border: 1px solid rgba(255,255,255,0.05);
     contain: layout style;
   }
   body.app-mode-webtoon .webtoon-frame {
-    min-height: 300px; border: none; border-radius: 0; overflow: visible; background: transparent;
+  border: none; border-radius: 0; overflow: visible; background: transparent;
     contain: none;
   }
   .webtoon-frame img { display: block; width: 100%; height: auto; opacity: 0; transition: opacity 0.22s ease; will-change: opacity; }
@@ -1040,20 +1014,11 @@
     </div>
     <div class="mode-sheet-title" id="mode-sheet-title">작품 제목</div>
     <div class="mode-sheet-ep"   id="mode-sheet-ep"></div>
-    <div class="mode-btns">
-      <button class="mode-btn" type="button" onclick="startReading('spread')">
-        <div class="mode-btn-icon">📖</div>
-        <div class="mode-btn-name">만화모드</div>
-        <div class="mode-btn-desc">좌우 페이지 넘기기</div>
-      </button>
+    <div class="mode-btns" style="grid-template-columns: 1fr;">
       <button class="mode-btn" type="button" onclick="startReading('webtoon')">
         <div class="mode-btn-icon">📱</div>
         <div class="mode-btn-name">웹툰모드</div>
-        <div class="mode-btn-desc">위아래 스크롤</div>
       </button>
-    </div>
-    <div style="display: flex; gap: 10px; margin-top: 4px;">
-      <button class="mode-cancel-btn" type="button" onclick="closeModeSelect()" style="flex: 1;">취소</button>
     </div>
     </div>
 </div>
@@ -1085,11 +1050,6 @@
 
       <div class="sidebar-pages">
         <div class="sidebar-page settings-page active" id="sidebar-page-settings">
-          <div class="section-box reader-mode-section">
-            <div class="section-title">Reader</div>
-            <div class="inline-row">
-              <button class="pill-btn active" id="mode-spread-btn" onclick="setReaderMode('spread')">책처럼</button>
-              <button class="pill-btn" id="mode-webtoon-btn" onclick="setReaderMode('webtoon')">웹툰처럼</button>
             </div>
           </div>
 
@@ -1191,13 +1151,9 @@
     <div id="webtoon-reader">
       <div class="webtoon-stack" id="webtoon-stack"></div>
       <div class="sentinel" id="webtoon-sentinel"></div>
-      <div class="webtoon-next-gate" id="webtoon-next-gate">
-        <div class="next-gate-inner">
-          <div class="next-gate-circle" id="next-gate-circle"></div>
-          <div class="next-gate-label" id="next-gate-label">계속 내리면 다음 화로 이동합니다</div>
-          <button class="next-gate-btn" type="button" onclick="loadNextEpisode()">다음 화</button>
-        </div>
-      </div>
+        <div id="webtoon-next-gate" style="padding: 40px 20px 80px; text-align: center;">
+        <button class="copy-main-btn" type="button" onclick="loadNextEpisode()" style="max-width: 240px; margin: 0 auto; display: block;">다음 화 보기</button>
+      </div>  
     </div>
 
     <div class="zone" id="z-left"   onclick="tapLeft()"></div>
@@ -1215,8 +1171,6 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       </button>
       <span id="hud-title"></span>
-      <span id="hud-page"></span>
-      <button class="hud-btn" id="hud-mode" onclick="toggleReaderMode()" title="리더 모드 전환">↕</button>
       <button class="hud-btn" id="hud-first-single" onclick="toggleFirstSingleHUD()" title="첫 페이지 단독">1P</button>
       <button class="hud-btn" onclick="toggleSidebar()" title="메뉴">☰</button>
     </div>
@@ -1389,11 +1343,6 @@ firstSingleInput.addEventListener('change', () => {
   }
 });
 fullscreenToggle.addEventListener('change', () => toggleFullscreen(fullscreenToggle.checked));
-webtoonReader.addEventListener('scroll', handleWebtoonScroll, { passive: true });
-webtoonReader.addEventListener('touchmove', markWebtoonGateInput, { passive: true });
-webtoonReader.addEventListener('pointerdown', markWebtoonGateInput, { passive: true });
-webtoonReader.addEventListener('pointerup', handleWebtoonGateRelease, { passive: true });
-webtoonReader.addEventListener('touchend', handleWebtoonGateRelease, { passive: true });
 document.addEventListener('fullscreenchange', syncFullscreenToggle);
 
 initImageScale();
@@ -1511,29 +1460,32 @@ function loadThumbnail(work, index) {
   const thumb = document.getElementById(`wthumb-${index}`);
   if (!thumb) return;
 
-  let extIndex = 0;
-
-  function tryLoadNext() {
-    if (extIndex >= extensions.length) return;
-
-    const ext = extensions[extIndex];
+  const promises = extensions.map(ext => {
     const path = `${work.webdavPath}thumbnail.${ext}`;
-    const testUrl = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+    const testUrl = ncConfig.url + path;
+    return fetch(testUrl, {
+      method: 'HEAD',
+      headers: { 'Authorization': ncConfig.authHeader }
+    }).then(res => {
+      if (res.ok) {
+        return path;
+      }
+      throw new Error('Not found');
+    });
+  });
 
-    const img = document.createElement('img');
-    img.onload = () => {
-      img.classList.add('loaded');
+  Promise.any(promises)
+    .then(successfulPath => {
+      if (!thumb) return;
+      const img = document.createElement('img');
+      img.onload = () => img.classList.add('loaded');
+      img.src = ncConfig.url + successfulPath + '?auth=' + encodeURIComponent(ncConfig.authHeader);
       thumb.appendChild(img);
-      work.thumbnail = path;
-    };
-    img.onerror = () => {
-      extIndex++;
-      tryLoadNext();
-    };
-    img.src = testUrl;
-  }
-
-  tryLoadNext();
+      work.thumbnail = successfulPath;
+    })
+    .catch(() => {
+      // 모든 확장자 썸네일 탐색 실패 시 에러 무시
+    });
 }
 
 
@@ -1552,7 +1504,6 @@ function selectWork(index) {
   const thumbEl= document.getElementById('mode-sheet-thumb');
 
   titleEl.textContent = selectedWork.name;
-  epEl.textContent = "클릭하여 회차를 불러옵니다";
 
   thumbEl.innerHTML = `<div class="mode-sheet-thumb-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`;
   
@@ -1734,12 +1685,12 @@ function renderList() {
       
     return `
       <div class="ep-item ${curEp===ep?'active':''}" id="ei-${ep}" onclick="loadEp(${ep},0)">
-        <div class="ep-main">
+          <div class="ep-main">
           <span class="ep-label">${ep}화</span>
-          <span class="ep-sub">${saved ? (saved.mode==='webtoon' ? `${saved.page}p` : `${saved.pair+1}컷`) + ' 이어보기' : (episodePageCount ? '준비됨' : '대기중')}</span>
+          <span class="ep-sub">${saved ? (saved.mode==='webtoon' ? `${saved.page}p` : `${saved.pair+1}컷`) + ' 이어보기' : ''}</span>
         </div>
         <div class="ep-meta">
-          <span class="ep-pages">${episodePageCount ? `${episodePageCount}p` : '대기중'}</span>
+          <span class="ep-pages">${episodePageCount ? `${episodePageCount}p` : ''}</span>
           ${percent !== null ? `<span class="ep-prog">${percent}%</span>` : ''}
         </div>
       </div>`;
@@ -1778,29 +1729,7 @@ async function loadEp(ep, pair=0, options={}) {
   else drawSpread();
 }
 
-function setReaderMode(mode) {
-  if (appMode === 'webtoon') { curMode='webtoon'; syncModeButtons(); return; }
-  if (curMode === mode) return;
-  curMode = mode;
-  try { localStorage.setItem(READER_MODE_KEY, curMode); } catch(e){}
-  syncModeButtons();
-  if (!curEp) return;
-  if (curMode === 'webtoon') {
-    const page = getCurrentSpreadLastPage();
-    renderWebtoonReader(curEp, { page, restoreWebtoonPage:true });
-  } else {
-    void ensureEpisodeSpreadLayout(curEp).then(() => { curPair = pageToPair(curEp, curPage); drawSpread(); });
-  }
-}
-function toggleReaderMode() {
-  if (appMode === 'webtoon') return;
-  setReaderMode(curMode === 'spread' ? 'webtoon' : 'spread');
-}
 function syncModeButtons() {
-  document.getElementById('mode-spread-btn').classList.toggle('active', curMode==='spread');
-  document.getElementById('mode-webtoon-btn').classList.toggle('active', curMode==='webtoon');
-  document.getElementById('hud-mode').classList.toggle('active', curMode==='webtoon');
-  document.getElementById('hud-mode').style.display = appMode==='webtoon'?'none':'grid';
   document.getElementById('hud-first-single').style.display = curMode==='spread'&&appMode!=='webtoon'?'grid':'none';
   spreadReader.style.display    = curMode==='spread'?'flex':'none';
   webtoonReader.style.display   = curMode==='webtoon'?'block':'none';
@@ -1855,7 +1784,7 @@ function renderWebtoonReader(startEp, options={}) {
   webtoonVisible = new Map(); webtoonRenderedEpisodes = [startEp]; webtoonAutoloaded = new Set([startEp]);
   webtoonLoadingNext=false; webtoonProgressRaf=0; webtoonAppendRaf=0; webtoonGateRaf=0;
   webtoonGateTriggered=false; webtoonGateArmed=false; webtoonGateInputSeen=false;
-  webtoonStack.innerHTML=''; resetWebtoonNextGate();
+  webtoonStack.innerHTML='';
   
   void ensureEpisodeReady(startEp).then(ready => {
     if (!ready || curMode!=='webtoon' || curEp!==startEp) return;
@@ -1865,7 +1794,6 @@ function renderWebtoonReader(startEp, options={}) {
     }
     pruneWebtoonEpisodeBlocks();
     if (restoreWebtoonPage) requestAnimationFrame(() => scrollToWebtoonPage(startEp, page, 'auto'));
-    resetWebtoonNextGate();
   });
   
   observeWebtoonSentinel();
@@ -2081,56 +2009,7 @@ function pruneWebtoonEpisodeBlocks() {
   });
 }
 
-function handleWebtoonScroll() {
-  scheduleWebtoonProgress();
-  if (appMode !== 'webtoon') return;
 
-  if (!webtoonLoadingNext) {
-    const scrollBottom = webtoonReader.scrollHeight - webtoonReader.scrollTop - webtoonReader.clientHeight;
-    const gateHeight = webtoonNextGate.offsetHeight || 340;
-
-    if (scrollBottom < gateHeight) {
-      const triggerDistance = 150; 
-      const pullDistance = gateHeight - scrollBottom;
-      let pct = Math.max(0, Math.min(1, pullDistance / triggerDistance));
-      const degrees = pct * 360;
-
-      nextGateCircle.style.setProperty('--gate-progress', `${degrees}deg`);
-
-      if (pct >= 1 && !webtoonGateTriggered) {
-        webtoonGateTriggered = true;
-        webtoonNextGate.classList.add('ready');
-        nextGateLabel.textContent = '손을 떼면 다음 화로 이동합니다';
-      } 
-      else if (pct < 1 && webtoonGateTriggered) {
-        webtoonGateTriggered = false;
-        webtoonNextGate.classList.remove('ready');
-        nextGateLabel.textContent = '계속 내리면 다음 화로 이동합니다';
-      }
-    } else {
-      resetWebtoonNextGate();
-    }
-  }
-}
-
-function markWebtoonGateInput() { }
-
-function handleWebtoonGateRelease() {
-  if (appMode !== 'webtoon') return;
-  if (webtoonGateTriggered && !webtoonLoadingNext) {
-    webtoonLoadingNext = true;
-    webtoonGateTriggered = false;
-    resetWebtoonNextGate();
-    loadNextEpisode();
-  }
-}
-
-function resetWebtoonNextGate() {
-  webtoonGateTriggered = false;
-  nextGateCircle.style.setProperty('--gate-progress', `0deg`);
-  webtoonNextGate.classList.remove('ready');
-  nextGateLabel.textContent = '계속 내리면 다음 화로 이동합니다';
-}
 
 function scrollToWebtoonPage(ep, page, behavior='smooth') {
   const frame = webtoonStack.querySelector(`[data-ep="${ep}"][data-page="${page}"]`);
