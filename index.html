@@ -79,12 +79,11 @@
   .copy-shell {
     position: relative; z-index: 1;
     width: min(520px, 92vw);
-    background: rgba(12, 15, 19, 0.82);
+    background: rgba(12, 15, 19, 0.95);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 28px;
     padding: 36px 32px;
     box-shadow: var(--shadow);
-    backdrop-filter: blur(16px);
     animation: riseIn 0.45s ease;
   }
 
@@ -209,8 +208,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    background: rgba(9, 11, 13, 0.85);
-    backdrop-filter: blur(12px);
+    background: rgba(9, 11, 13, 0.95);
     border-bottom: 1px solid rgba(255,255,255,0.06);
   }
 
@@ -246,8 +244,6 @@
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    transform: translateZ(0);
-    will-change: scroll-position;
     padding: 20px 16px calc(20px + var(--safe-bottom));
   }
 
@@ -361,8 +357,7 @@
   #mode-select {
     display: none;
     position: fixed; inset: 0; z-index: 150;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(6px);
+    background: rgba(0,0,0,0.95);
     align-items: flex-end;
     justify-content: center;
     padding-bottom: var(--safe-bottom);
@@ -492,8 +487,7 @@
   #sb-overlay {
     display: none;
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.68);
-    backdrop-filter: blur(3px);
+    background: rgba(0,0,0,0.95);
     z-index: 70;
   }
   #sb-overlay.open { display: block; }
@@ -504,10 +498,9 @@
     width: min(var(--sidebar-w), 96vw);
     background:
       linear-gradient(180deg, rgba(255,255,255,0.05), transparent 18%),
-      rgba(11,14,18,0.96);
+      rgba(11,14,18,0.98);
     border: 1px solid var(--border);
     border-radius: 28px;
-    backdrop-filter: blur(16px);
     display: flex; flex-direction: column;
     overflow: hidden;
     transform: translateX(-50%) translateY(12px);
@@ -775,8 +768,6 @@
     overscroll-behavior-y: contain;
     background: #050505;
     -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
-    will-change: scroll-position;
     touch-action: pan-y;
   }
   #webtoon-reader.switching { opacity: 0; }
@@ -865,7 +856,7 @@
   #nav-ov.visible .arr-btn { pointer-events: all; }
   .arr-btn { width: 76px; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; cursor: pointer; background: linear-gradient(to right, rgba(0,0,0,0.52), transparent); }
   .arr-btn.right { background: linear-gradient(to left, rgba(0,0,0,0.52), transparent); }
-  .arr-icon { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.10); color: #fff; border: 1px solid rgba(255,255,255,0.18); backdrop-filter: blur(8px); font-size: 26px; }
+  .arr-icon { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,0.35); color: #fff; border: 1px solid rgba(255,255,255,0.18); font-size: 26px; }
 
   #hud {
     position: absolute; top: 0; left: 0; right: 0; z-index: 25;
@@ -882,8 +873,8 @@
     width: 38px; height: 38px;
     display: grid; place-items: center; border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.08);
-    color: #fff; cursor: pointer; backdrop-filter: blur(6px);
+    background: rgba(255,255,255,0.32);
+    color: #fff; cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
   }
   .hud-home-btn:hover { background: rgba(255,107,53,0.25); border-color: rgba(255,107,53,0.6); }
@@ -891,7 +882,7 @@
   .hud-btn {
     width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.08); color: #fff; cursor: pointer; backdrop-filter: blur(6px);
+    background: rgba(255,255,255,0.32); color: #fff; cursor: pointer;
   }
   .hud-btn.active { color: var(--accent); border-color: rgba(255,107,53,0.58); background: rgba(255,107,53,0.20); }
   #hud-title { font-size: 13px; font-weight: 700; min-width: 0; }
@@ -899,7 +890,7 @@
 
   #end-screen {
     display: none; position: absolute; inset: 0; z-index: 30;
-    background: rgba(0,0,0,0.86); backdrop-filter: blur(12px);
+    background: rgba(0,0,0,0.95);
     align-items: center; justify-content: center; padding: 24px;
   }
   #end-screen.visible { display: flex; }
@@ -920,8 +911,8 @@
     position: fixed; left: 50%; bottom: 28px;
     transform: translateX(-50%) translateY(16px);
     padding: 12px 18px; border-radius: 999px;
-    background: rgba(15,18,22,0.94); border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 18px 36px rgba(0,0,0,0.30); backdrop-filter: blur(10px);
+    background: rgba(15,18,22,0.97); border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 18px 36px rgba(0,0,0,0.30);
     color: var(--text); font-size: 13px; font-weight: 700;
     z-index: 120; white-space: nowrap;
     opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none;
@@ -931,7 +922,7 @@
   /* 보관함 오버레이 */
   #library-overlay {
     display: none; position: fixed; inset: 0; z-index: 130;
-    background: rgba(0,0,0,0.74); backdrop-filter: blur(4px); padding: 20px;
+    background: rgba(0,0,0,0.95); padding: 20px;
   }
   #library-overlay.open { display: block; }
   .library-panel {
@@ -1588,11 +1579,15 @@ function loadThumbnail(work, index) {
       const ext = extensions[currentExtIndex];
       const path = `${work.webdavPath}thumbnail.${ext}`;
       work.thumbnail = path;
-      img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+
+      // Nextcloud 코어 프리뷰 API를 지원하는 경우 썸네일 사이즈를 작게 요청
+      // (만약 프리뷰 API가 안 먹히면 기존처럼 원본 경로 호출)
+      const previewUrl = `/core/preview?fileId=${encodeURIComponent(path)}&x=250&y=350&a=true`;
+      img.src = ncConfig.url + previewUrl + '&auth=' + encodeURIComponent(ncConfig.authHeader);
     };
 
     if (work.thumbnail) {
-      img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+      img.src = ncConfig.url + `/core/preview?fileId=${encodeURIComponent(work.thumbnail)}&x=250&y=350&a=true` + '&auth=' + encodeURIComponent(ncConfig.authHeader);
     } else {
       tryLoadExtension();
     }
@@ -1976,29 +1971,24 @@ function disconnectWebtoonObservers() {
 }
 
 async function loadWebtoonFrame(frame, ep, page) {
-  if (frame.classList.contains('loaded')) return;
-  if (frame.dataset.loading === '1') return;
+  if (frame.classList.contains('loaded') || frame.dataset.loading === '1') return;
   frame.dataset.loading = '1';
   try {
     const files = episodes[ep];
     const file  = files?.[page-1];
-    if (!file) { delete frame.dataset.loading; return; }
-    if (!frame.isConnected) { delete frame.dataset.loading; return; }
+    if (!file || !frame.isConnected) { delete frame.dataset.loading; return; }
 
-    const img = frame.querySelector('img');
-    if (!img) { delete frame.dataset.loading; return; }
+    // [수정된 로직] img 태그가 삭제되어 없다면 새로 생성해서 붙임
+    let img = frame.querySelector('img');
+    if (!img) {
+      img = document.createElement('img');
+      img.alt = ''; img.decoding = 'async';
+      frame.appendChild(img);
+    }
 
-    img.onload = () => {
-      frame.classList.add('loaded');
-      delete frame.dataset.loading;
-    };
-    img.onerror = () => {
-      delete frame.dataset.loading;
-      frame.classList.remove('loaded');
-      // [수정] 무한 렉을 유발하던 1초 뒤 재시도 코드를 완전히 삭제했습니다.
-    };
+    img.onload = () => { frame.classList.add('loaded'); delete frame.dataset.loading; };
+    img.onerror = () => { delete frame.dataset.loading; frame.classList.remove('loaded'); };
     
-    // [수정] 꼬리표(?auth=)를 붙여서 서비스 워커에 토스합니다.
     img.src = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
   } catch(e) {
     delete frame.dataset.loading;
@@ -2007,13 +1997,20 @@ async function loadWebtoonFrame(frame, ep, page) {
 }
 function unloadWebtoonFrame(frame) {
   const ep = +frame.dataset.ep;
-  // 만화 모드와 격리되어 현재 읽는 화(curEp)가 아니면 가차없이 메모리를 완전히 비웁니다.
   if (ep !== curEp) {
+    // 기존 로직 유지
     const img = frame.querySelector('img');
     if (img) {
-      img.onload = null;
-      img.onerror = null;
-      img.removeAttribute('src'); 
+      img.onload = null; img.onerror = null; img.removeAttribute('src'); 
+    }
+    frame.classList.remove('loaded');
+    delete frame.dataset.loading;
+  } else {
+    // [추가된 로직] 현재 화라도 화면에서 멀어지면 <img> 태그 자체를 파괴하여 RAM 확보
+    const img = frame.querySelector('img');
+    if (img) {
+      img.onload = null; img.onerror = null; img.src = '';
+      frame.removeChild(img);
     }
     frame.classList.remove('loaded');
     delete frame.dataset.loading;
@@ -2713,7 +2710,6 @@ async function preloadNextEpisodeBackground() {
   if (currentIndex < 0 || currentIndex >= epKeys.length - 1) return;
 
   const nextEp = epKeys[currentIndex + 1];
-
   if (episodeSpreadCache.has(nextEp)) return;
 
   try {
@@ -2726,21 +2722,21 @@ async function preloadNextEpisodeBackground() {
 
     const files = episodes[nextEp];
     if (files && files.length > 0) {
-      // RAM 과부하 방지: Image 객체를 생성하지 않고 fetch를 이용해 브라우저 디스크 캐시에만 저장
-      // 브라우저의 병렬 연결 제한을 고려하여 한 번에 너무 많은 요청이 가지 않도록 처리할 수도 있지만,
-      // 브라우저 자체가 우선순위를 낮춰서 백그라운드 처리해줍니다.
-      const fetchPromises = files.map(file => {
-        const fullUrl = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-        return fetch(fullUrl, { 
-          mode: 'cors', 
-          cache: 'force-cache',
-          // 중요: 다운로드 우선순위를 낮춰 현재 보고 있는 화면 버벅임을 방지 (일부 모던 브라우저 지원)
-          priority: 'low' 
-        }).catch(() => {}); // 실패해도 무시
-      });
-      
-      // 백그라운드에서 진행되므로 굳이 await로 기다릴 필요 없이 던져둡니다.
-      Promise.all(fetchPromises);
+      const concurrencyLimit = 3; // 동시 다운로드 수 제한
+      let index = 0;
+
+      const worker = async () => {
+        while (index < files.length) {
+          const file = files[index++];
+          const fullUrl = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+          // 브라우저 캐시에만 적재 (priority: 'low'로 현재 화면 버벅임 방지)
+          await fetch(fullUrl, { mode: 'cors', cache: 'force-cache', priority: 'low' }).catch(() => {});
+        }
+      };
+
+      // concurrencyLimit 개수만큼의 워커가 병렬로 작동
+      const workers = Array(concurrencyLimit).fill(null).map(worker);
+      Promise.all(workers);
     }
   } catch (e) {
     console.warn('다음 화 미리 불러오기 실패:', e);
