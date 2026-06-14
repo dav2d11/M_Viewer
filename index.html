@@ -1385,6 +1385,7 @@ document.addEventListener('DOMContentLoaded', () => {
       worksList = JSON.parse(cachedWorks);
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('home-screen').classList.add('visible');
+      document.getElementById('splash-screen').style.display = 'flex';
       renderHomeScreen();
       // 배경에서 조용히 최신 목록 동기화
       connectNextcloud(true);
@@ -2426,6 +2427,16 @@ function getDeviceLabel() {
 /* ════════════════════════════════════════════════════════
    UTILITY
 ════════════════════════════════════════════════════════ */
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(match) {
+    const escape = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return escape[match];
+  });
+}
+
+
 function nextFrame() { return new Promise(r => requestAnimationFrame(r)); }
 /* [발열 최적화] 무거운 작업 시 메인 스레드에 휴식 시간을 5ms 부여하여 화면 멈춤과 CPU 풀로드를 완화 */
 function yieldToBrowser() { return new Promise(r => setTimeout(r, 5)); }
