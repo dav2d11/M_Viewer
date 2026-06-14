@@ -1310,6 +1310,7 @@ let webtoonGateRaf       = 0;
 let webtoonGateTriggered = false;
 let webtoonGateArmed     = false;
 let webtoonGateInputSeen = false;
+let preloadAbortController = null;
 let saveProgressTimer = null;
 let cloudSyncTimer    = null;
 let remoteProgressStore = {};
@@ -1808,6 +1809,12 @@ function renderList() {
 }
 
 async function loadEp(ep, pair=0, options={}) {
+  // ▼ [추가] 다른 화로 넘어갈 때, 기존 백그라운드 다운로드를 즉시 강제 취소! ▼
+  if (preloadAbortController) {
+    preloadAbortController.abort();
+    preloadAbortController = null;
+  }
+
   const { preserveMode=false, page=null, restoreWebtoonPage=false } = options;
   const token = ++episodeLoadToken;
 
@@ -2201,15 +2208,25 @@ async function ensureEpisodeSpreadLayout(ep) {
   if (episodeSpreadCache.has(ep)) return;
   if (episodeSpreadLayoutPending.has(ep)) { await episodeSpreadLayoutPending.get(ep); return; }
   const files = episodes[ep]; if (!files?.length) return;
-  const p = Promise.all(files.map(f => ensureImageMeta(f))).then(metas => {
-    episodeSpreadCache.set(ep, metas);
-    episodeSpreadLayoutPending.delete(ep);
-  }).catch(e => {
-    episodeSpreadLayoutPending.delete(ep);
-    throw e;
-  });
+
+  // ▼ 청크 처리 + 상태 초기화(에러 핸들링) 완벽 적용 버전 ▼
+  const p = (async () => {
+    try {
+      const metas = [];
+      for (let i = 0; i < files.length; i += 10) {
+        const chunk = files.slice(i, i + 10);
+        const chunkMetas = await Promise.all(chunk.map(f => ensureImageMeta(f)));
+        metas.push(...chunkMetas);
+      }
+      episodeSpreadCache.set(ep, metas);
+    } finally {
+      // 🚨 핵심: 성공하든, 중간에 에러가 터지든 Pending 목록에서는 무조건 비워줍니다!
+      episodeSpreadLayoutPending.delete(ep);
+    }
+  })();
+
   episodeSpreadLayoutPending.set(ep, p);
-  await p;
+  await p; // 만약 위 try 블록에서 에러가 났다면 여기서 자연스럽게 throw 됩니다.
 }
 
 function getSpreads(files, ep) {
@@ -2727,30 +2744,29 @@ async function preloadNextEpisodeBackground() {
     const isReady = await ensureEpisodeReady(nextEp);
     if (!isReady) return;
 
-    if (curMode === 'spread') {
-      await ensureEpisodeSpreadLayout(nextEp);
-    }
+    // 만화 모드일지라도 다음 화의 레이아웃 미리 계산은 브라우저 렉을 유발하므로 지우거나 주석 처리하시는 것이 좋습니다.
 
     const files = episodes[nextEp];
     if (files && files.length > 0) {
-      // RAM 과부하 방지: Image 객체를 생성하지 않고 fetch를 이용해 브라우저 디스크 캐시에만 저장
-      // 브라우저의 병렬 연결 제한을 고려하여 한 번에 너무 많은 요청이 가지 않도록 처리할 수도 있지만,
-      // 브라우저 자체가 우선순위를 낮춰서 백그라운드 처리해줍니다.
+      // ▼ [수정] 다운로드 취소 컨트롤러 생성 ▼
+      preloadAbortController = new AbortController();
+      const signal = preloadAbortController.signal;
+
       const fetchPromises = files.map(file => {
         const fullUrl = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
         return fetch(fullUrl, { 
           mode: 'cors', 
           cache: 'force-cache',
-          // 중요: 다운로드 우선순위를 낮춰 현재 보고 있는 화면 버벅임을 방지 (일부 모던 브라우저 지원)
-          priority: 'low' 
-        }).catch(() => {}); // 실패해도 무시
+          priority: 'low',
+          signal: signal // ▼ [추가] 브라우저에게 취소 가능함을 알림
+        }).catch(() => {}); 
       });
       
-      // 백그라운드에서 진행되므로 굳이 await로 기다릴 필요 없이 던져둡니다.
       Promise.all(fetchPromises);
     }
   } catch (e) {
-    console.warn('다음 화 미리 불러오기 실패:', e);
+    // 취소되었을 때 발생하는 에러는 무시
+    if (e.name !== 'AbortError') console.warn('다음 화 미리 불러오기 실패:', e);
   }
 }</script>
 </body>
