@@ -981,6 +981,14 @@
 </head>
 <body>
 
+  <div id="splash-screen" style="display: none; position: fixed; inset: 0; z-index: 999; background: #090b0d; flex-direction: column; align-items: center; justify-content: center;">
+  <div class="home-logo" style="font-size: 42px; margin-bottom: 24px; animation: riseIn 0.5s ease;">MANGA<span style="color: var(--accent);">.</span>VIEWER</div>
+  <div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+</div>
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
 <div id="login-screen" style="position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; background: linear-gradient(135deg, rgba(255, 107, 53, 0.14), transparent 25%), #090b0d; overflow: hidden;">
   <div class="copy-shell">
     <div class="copy-title">NEXTCLOUD<span>.</span></div>
@@ -1369,12 +1377,23 @@ renderLibraryDashboard();
 document.addEventListener('DOMContentLoaded', () => {
   const saved = localStorage.getItem(NC_STORE_KEY);
   if (saved) {
-    const data = JSON.parse(saved);
-    document.getElementById('nc-url').value = data.url;
-    document.getElementById('nc-folder').value = data.folder;
-    document.getElementById('nc-user').value = data.user;
-    document.getElementById('nc-pass').value = data.pass;
-    connectNextcloud();
+    ncConfig = JSON.parse(saved);
+    
+    // 1. 캐시된 작품 목록이 있으면 즉시 홈 화면부터 그림 (기다림 없음)
+    const cachedWorks = localStorage.getItem(WORKS_META_KEY);
+    if (cachedWorks) {
+      worksList = JSON.parse(cachedWorks);
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('home-screen').classList.add('visible');
+      renderHomeScreen();
+      // 배경에서 조용히 최신 목록 동기화
+      connectNextcloud(true);
+    } else {
+      // 2. 처음이라 캐시가 없으면 스플래시 화면 띄우고 데이터 가져오기
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('splash-screen').style.display = 'flex';
+      connectNextcloud(true);
+    }
   }
 });
 
@@ -1389,44 +1408,60 @@ async function webdavPropfind(path, depth = 1) {
   return new DOMParser().parseFromString(xml, "text/xml");
 }
 
-async function connectNextcloud() {
-  const url = document.getElementById('nc-url').value.trim().replace(/\/$/, '');
-  const folder = document.getElementById('nc-folder').value.trim();
-  const user = document.getElementById('nc-user').value.trim();
-  const pass = document.getElementById('nc-pass').value.trim();
-
-  if (!url || !user || !pass) { document.getElementById('login-status').textContent = '정보를 모두 입력해주세요.'; return; }
-
-  ncConfig = { url, folder, user, pass, authHeader: 'Basic ' + btoa(user + ':' + pass) };
-  document.getElementById('login-status').textContent = '서버에 연결하여 작품 목록을 불러오는 중...';
+async function connectNextcloud(isBackground = false) {
+  let url, folder, user, pass;
+  
+  // 백그라운드 동기화면 저장된 설정 사용, 아니면 입력창 데이터 사용
+  if (isBackground) {
+    ({ url, folder, user, pass } = ncConfig);
+  } else {
+    url = document.getElementById('nc-url').value.trim().replace(/\/$/, '');
+    folder = document.getElementById('nc-folder').value.trim();
+    user = document.getElementById('nc-user').value.trim();
+    pass = document.getElementById('nc-pass').value.trim();
+    if (!url || !user || !pass) { 
+      document.getElementById('login-status').textContent = '정보를 모두 입력해주세요.'; return; 
+    }
+    ncConfig = { url, folder, user, pass, authHeader: 'Basic ' + btoa(user + ':' + pass) };
+    document.getElementById('login-status').textContent = '서버에 연결하여 작품 목록을 불러오는 중...';
+  }
 
   try {
     const xml = await webdavPropfind(`/remote.php/webdav/${folder}/`, 1);
     
-    // 서비스 워커에 로그인 정보 전달
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
-        type: 'SET_CREDENTIALS',
-        authHeader: ncConfig.authHeader,
-        baseUrl: ncConfig.url
+        type: 'SET_CREDENTIALS', authHeader: ncConfig.authHeader, baseUrl: ncConfig.url
       });
     }
 
     const responses = xml.getElementsByTagNameNS("*", "response");
+    const newWorksList = [];
     
-    worksList = [];
     for (let i = 1; i < responses.length; i++) {
       const href = responses[i].getElementsByTagNameNS("*", "href")[0].textContent;
       if (responses[i].getElementsByTagNameNS("*", "collection").length > 0) {
         const name = decodeURIComponent(href).split('/').filter(Boolean).pop();
-        worksList.push({ name, webdavPath: href, thumbnail: href + 'thumbnail.jpg' });
+        
+        // 기존 캐시에 저장된 썸네일 경로가 있다면 유지, 없으면 기본값 세팅
+        const existingWork = worksList.find(w => w.name === name);
+        newWorksList.push({ 
+          name, 
+          webdavPath: href, 
+          thumbnail: existingWork?.thumbnail || null 
+        });
       }
     }
     
+    worksList = newWorksList;
     localStorage.setItem(NC_STORE_KEY, JSON.stringify(ncConfig));
-    renderHomeScreen();
+    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList)); // 캐시 저장
+    
+    document.getElementById('splash-screen').style.display = 'none'; // 스플래시 종료
+    renderHomeScreen(); // 화면 갱신
   } catch (err) {
-    document.getElementById('login-status').textContent = '연결 실패: 주소나 앱 비밀번호, CORS 설정을 확인하세요.';
+    if (!isBackground) document.getElementById('login-status').textContent = '연결 실패: 주소나 앱 비밀번호를 확인하세요.';
+    document.getElementById('splash-screen').style.display = 'none';
   }
 }
 
@@ -1462,38 +1497,44 @@ function renderHomeScreen() {
 }
 
 function loadThumbnail(work, index) {
-  const extensions = ['jpg', 'jpeg', 'png', 'webp'];
   const thumb = document.getElementById(`wthumb-${index}`);
   if (!thumb) return;
 
-  const promises = extensions.map(ext => {
+  const img = document.createElement('img');
+  const extensions = ['jpg', 'png', 'jpeg', 'webp'];
+  let currentExtIndex = 0;
+
+  // 성공 시 작동할 함수 (캐시 업데이트 및 화면 표시)
+  img.onload = () => {
+    img.classList.add('loaded');
+    thumb.appendChild(img);
+    // 올바른 확장자를 찾았다면 캐시에 영구 저장하여 다음번엔 묻지도 따지지도 않고 바로 로드
+    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
+  };
+
+  // 실패 시 다음 확장자로 찔러보기
+  img.onerror = () => {
+    currentExtIndex++;
+    if (currentExtIndex < extensions.length) {
+      tryLoadExtension();
+    }
+  };
+
+  const tryLoadExtension = () => {
+    const ext = extensions[currentExtIndex];
     const path = `${work.webdavPath}thumbnail.${ext}`;
-    const testUrl = ncConfig.url + path;
-    return fetch(testUrl, {
-      method: 'HEAD',
-      headers: { 'Authorization': ncConfig.authHeader }
-    }).then(res => {
-      if (res.ok) {
-        return path;
-      }
-      throw new Error('Not found');
-    });
-  });
+    work.thumbnail = path; // 일단 경로를 임시 등록해봄
+    img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+  };
 
-  Promise.any(promises)
-    .then(successfulPath => {
-      if (!thumb) return;
-      const img = document.createElement('img');
-      img.onload = () => img.classList.add('loaded');
-      img.src = ncConfig.url + successfulPath + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-      thumb.appendChild(img);
-      work.thumbnail = successfulPath;
-    })
-    .catch(() => {
-      // 모든 확장자 썸네일 탐색 실패 시 에러 무시
-    });
+  // 만약 이전에 찾아둔 정확한 확장자가 캐시에 있다면 바로 적용
+  if (work.thumbnail) {
+    img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+  } else {
+    // 없으면 가장 흔한 jpg부터 순서대로 때려맞추기 시작 (무거운 HEAD 통신 삭제)
+    tryLoadExtension();
+  }
 }
-
 
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1725,11 +1766,14 @@ async function loadEp(ep, pair=0, options={}) {
   document.getElementById('end-screen').classList.remove('visible');
   syncModeButtons();
   
-  if (curMode === 'webtoon') {
+if (curMode === 'webtoon') {
     renderWebtoonReader(ep, { page, restoreWebtoonPage });
   } else {
     drawSpread();
   }
+  
+  // 👇 화면에 만화를 띄우고 1.5초 뒤, 사용자 몰래 다음 화 준비를 시작합니다.
+  setTimeout(preloadNextEpisodeBackground, 1500);
 }
 function syncModeButtons() {
   document.getElementById('hud-first-single').style.display = curMode==='spread'&&appMode!=='webtoon'?'grid':'none';
@@ -2524,6 +2568,48 @@ function mergeProgressStore(local, remote) {
   return merged;
 }
 function setCloudStatus(text) { document.getElementById('cloud-status').textContent=text; }
+
+
+// 현재 화를 보는 동안 다음 화를 몰래 미리 준비하는 함수
+async function preloadNextEpisodeBackground() {
+  if (!curEp || !epKeys.length) return;
+  const currentIndex = epKeys.indexOf(curEp);
+  
+  // 마지막 화라면 미리 불러올 필요 없음
+  if (currentIndex < 0 || currentIndex >= epKeys.length - 1) return;
+
+  const nextEp = epKeys[currentIndex + 1];
+
+  // 이미 캐시(임시 저장소)에 다음 화 레이아웃이 계산되어 있다면 패스
+  if (episodeSpreadCache.has(nextEp)) return;
+
+  try {
+    // 1. 서버에서 다음 화 파일 목록(XML) 몰래 받아오기
+    const isReady = await ensureEpisodeReady(nextEp);
+    if (!isReady) return;
+
+    // 2. 만화 모드일 경우: 다음 화 전체 이미지의 가로세로 비율 몰래 계산해두기
+    // (이게 가장 병목이 심한 작업이라, 미리 해두면 다음 화 로딩이 1초 만에 끝납니다)
+    if (curMode === 'spread') {
+      await ensureEpisodeSpreadLayout(nextEp);
+    }
+
+    // 3. 다음 화의 첫 1~3장 이미지를 브라우저 캐시에 몰래 다운로드
+    const files = episodes[nextEp];
+    if (files && files.length > 0) {
+      for (let i = 0; i < Math.min(3, files.length); i++) {
+        const prefetchImg = new Image();
+        prefetchImg.src = files[i].url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+      }
+    }
+  } catch (e) {
+    console.warn('다음 화 미리 불러오기 실패:', e);
+  }
+}
+if (curMode === 'webtoon') {
+    renderWebtoonReader(ep, { page, restoreWebtoonPage });
+  } else {
+    drawSpread();
 </script>
 </body>
 </html>
