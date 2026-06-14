@@ -2055,9 +2055,21 @@ function pruneWebtoonEpisodeBlocks() {
 
 
 
-function scrollToWebtoonPage(ep, page, behavior='smooth') {
+function scrollToWebtoonPage(ep, page, behavior='auto') {
   const frame = webtoonStack.querySelector(`[data-ep="${ep}"][data-page="${page}"]`);
-  if (frame) frame.scrollIntoView({ behavior, block:'start' });
+  if (!frame) return;
+
+  // 1. 우선 즉시 해당 위치로 스크롤 시도
+  frame.scrollIntoView({ behavior, block: 'start' });
+
+  // 2. 위쪽 이미지들이 비동기로 로딩되며 밀리는 현상 방지
+  // 1초 동안 0.1초 간격으로 위치를 지속적으로 보정해줍니다.
+  let attempts = 0;
+  const timer = setInterval(() => {
+    frame.scrollIntoView({ behavior: 'auto', block: 'start' });
+    attempts++;
+    if (attempts > 10) clearInterval(timer);
+  }, 100);
 }
 
 function getCurrentSpreadLastPage() {
@@ -2424,6 +2436,12 @@ function saveCurrentProgress() {
   clearTimeout(saveProgressTimer);
   saveProgressTimer=setTimeout(()=>{ commitCurrentProgress(); scheduleCloudSync(); }, 60);
 }
+
+// 이 함수를 새로 추가해 주세요!
+function flushCurrentProgress() {
+  commitCurrentProgress();
+}
+
 function commitCurrentProgress() {
   if (!currentMangaId||!curEp) return null;
   const store = readProgressStore();
