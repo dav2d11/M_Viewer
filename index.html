@@ -1478,13 +1478,14 @@ async function renderHomeScreen() {
   const grid = document.getElementById('home-grid');
   if (!worksList.length) { 
     grid.innerHTML = '<div class="home-empty">작품(하위 폴더)이 없습니다</div>'; 
+    document.getElementById('splash-screen').style.display = 'none';
     return; 
   }
 
-  // 1. 기본 뼈대 DOM 생성
+  // 1. 기본 뼈대 DOM 생성 (이미지는 아직 안 불러옵니다)
   grid.innerHTML = worksList.map((work, i) => `
     <div class="work-card" onclick="selectWork(${i})">
-      <div class="work-thumb" id="wthumb-${i}">
+      <div class="work-thumb" id="wthumb-${i}" data-index="${i}">
         <div class="work-thumb-placeholder">📚</div>
       </div>
       <div class="work-info">
@@ -1493,15 +1494,72 @@ async function renderHomeScreen() {
       </div>
     </div>`).join('');
 
-  // 2. CSS 속성(order)을 이용해 깔끔하게 카드 위치 재배열 및 텍스트 씌우기
+  // 2. 순서 재배열
   updateGridOrderAndText();
 
-  // 3. 썸네일 로딩
-  const thumbPromises = worksList.map((work, i) => loadThumbnail(work, i));
-  await Promise.allSettled(thumbPromises);
+  // 3. 화면 노출 감지기(Observer)를 썸네일 박스들에 부착
+  const thumbs = document.querySelectorAll('.work-thumb');
+  thumbs.forEach(thumb => thumbnailObserver.observe(thumb));
 
-  // 4. 로딩 완료 시 스플래시 종료
+  // 4. 로딩 딜레이 없이 즉시 스플래시 화면 종료 (앱 진입 속도 극대화)
   document.getElementById('splash-screen').style.display = 'none';
+}
+
+// ▼ 스크롤해서 화면에 보일 때만 이미지를 로딩하는 감시자 생성 ▼
+const thumbnailObserver = new IntersectionObserver((entries, observer) => {
+  entries.forEach(entry => {
+    // 카드가 화면에 조금이라도 나타나면
+    if (entry.isIntersecting) {
+      const thumbEl = entry.target;
+      const index = thumbEl.dataset.index;
+      const work = worksList[index];
+      
+      // 이미지 로딩 시작
+      loadThumbnailLazy(work, thumbEl, index);
+      
+      // 한 번 로딩을 시작한 카드는 더 이상 감시하지 않음
+      observer.unobserve(thumbEl);
+    }
+  });
+}, {
+  root: document.querySelector('.home-grid-wrap'),
+  rootMargin: '200px 0px', // 실제 화면에 보이기 200px 전부터 미리 로딩 시작
+  threshold: 0
+});
+
+// ▼ 개별 썸네일 로딩 로직 ▼
+function loadThumbnailLazy(work, thumbEl, index) {
+  const img = document.createElement('img');
+  const extensions = ['jpg', 'png', 'jpeg', 'webp'];
+  let currentExtIndex = 0;
+
+  img.onload = () => {
+    img.classList.add('loaded');
+    thumbEl.appendChild(img);
+    // 썸네일 경로를 찾았다면 캐시에 저장 (다음 번엔 확장자 탐색 없이 바로 로딩)
+    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
+  };
+
+  img.onerror = () => {
+    currentExtIndex++;
+    if (currentExtIndex < extensions.length) {
+      tryLoadExtension();
+    }
+  };
+
+  const tryLoadExtension = () => {
+    const ext = extensions[currentExtIndex];
+    const path = `${work.webdavPath}thumbnail.${ext}`;
+    work.thumbnail = path;
+    img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+  };
+
+  // 이전에 저장해둔 썸네일 경로가 있다면 바로 로딩, 없으면 탐색 시작
+  if (work.thumbnail) {
+    img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
+  } else {
+    tryLoadExtension();
+  }
 }
 
 function updateGridOrderAndText() {
@@ -1560,45 +1618,6 @@ function updateGridOrderAndText() {
 }
 
 
-function loadThumbnail(work, index) {
-  return new Promise((resolve) => {
-    const thumb = document.getElementById(`wthumb-${index}`);
-    if (!thumb) return resolve();
-
-    const img = document.createElement('img');
-    const extensions = ['jpg', 'png', 'jpeg', 'webp'];
-    let currentExtIndex = 0;
-
-    img.onload = () => {
-      img.classList.add('loaded');
-      thumb.appendChild(img);
-      localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
-      resolve(); // 성공 시 Promise 완료
-    };
-
-    img.onerror = () => {
-      currentExtIndex++;
-      if (currentExtIndex < extensions.length) {
-        tryLoadExtension();
-      } else {
-        resolve(); // 모든 확장자 실패 시에도 무한 대기 방지를 위해 완료 처리
-      }
-    };
-
-    const tryLoadExtension = () => {
-      const ext = extensions[currentExtIndex];
-      const path = `${work.webdavPath}thumbnail.${ext}`;
-      work.thumbnail = path;
-      img.src = ncConfig.url + path + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-    };
-
-    if (work.thumbnail) {
-      img.src = ncConfig.url + work.thumbnail + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-    } else {
-      tryLoadExtension();
-    }
-  });
-}
 /* ════════════════════════════════════════════════════════
    작품 선택 → 모드 선택 바텀시트
 ════════════════════════════════════════════════════════ */
