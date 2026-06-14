@@ -1318,6 +1318,25 @@ let remoteProgressStore = {};
 let worksList = []; 
 let selectedWork = null; 
 
+// ▼ [추가] 스플래시 화면 상태를 관리하는 변수와 함수
+let isSplashHidden = false;
+
+function hideSplashScreen() {
+  if (isSplashHidden) return; // 이미 숨겼다면 무시
+  isSplashHidden = true;
+  
+  const splash = document.getElementById('splash-screen');
+  if (splash) {
+    // 0.2초 동안 부드럽게 투명해지며 사라짐
+    splash.style.transition = 'opacity 0.2s ease';
+    splash.style.opacity = '0';
+    setTimeout(() => { 
+      splash.style.display = 'none'; 
+      splash.style.opacity = '1'; // 다음을 위해 원상복구
+    }, 200);
+  }
+}
+
 const deviceId    = getOrCreateDeviceId();
 const deviceLabel = getDeviceLabel();
 
@@ -1476,9 +1495,10 @@ async function renderHomeScreen() {
   document.getElementById('home-screen').classList.add('visible');
   
   const grid = document.getElementById('home-grid');
+  // 작품이 하나도 없을 때는 즉시 스플래시 종료
   if (!worksList.length) { 
     grid.innerHTML = '<div class="home-empty">작품(하위 폴더)이 없습니다</div>'; 
-    document.getElementById('splash-screen').style.display = 'none';
+    hideSplashScreen(); 
     return; 
   }
 
@@ -1501,8 +1521,10 @@ async function renderHomeScreen() {
   const thumbs = document.querySelectorAll('.work-thumb');
   thumbs.forEach(thumb => thumbnailObserver.observe(thumb));
 
-  // 4. 로딩 딜레이 없이 즉시 스플래시 화면 종료 (앱 진입 속도 극대화)
-  document.getElementById('splash-screen').style.display = 'none';
+  // 4. [변경] 즉시 끄지 않고 상태를 초기화한 뒤 안전장치(타이머)를 켭니다.
+  // 캐시 로딩이 꼬여서 무한 대기하는 걸 막기 위해, 최대 0.6초 뒤에는 무조건 끕니다.
+  isSplashHidden = false;
+  setTimeout(hideSplashScreen, 600);
 }
 
 // ▼ 스크롤해서 화면에 보일 때만 이미지를 로딩하는 감시자 생성 ▼
@@ -1540,11 +1562,13 @@ async function loadThumbnailLazy(work, thumbEl, index) {
     img.classList.add('loaded');
     thumbEl.appendChild(img);
     localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
-
-    // ▼ [추가] 이미지가 로딩 완료되면 메모리에 물고 있던 Blob URL을 해제합니다.
+    
     if (img.src.startsWith('blob:')) {
       URL.revokeObjectURL(img.src);
     }
+    
+    // ▼ [추가] 눈에 보이는 첫 번째 이미지가 로딩 완료되는 즉시 스플래시를 끕니다!
+    hideSplashScreen();
   };
 
   // 2. 이미 성공했던 확장자 정보가 로컬스토리지에 저장되어 있는 경우
