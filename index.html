@@ -1060,12 +1060,8 @@
 
       <div class="sidebar-pages">
         <div class="sidebar-page settings-page active" id="sidebar-page-settings">
-
-
-
           <div class="section-box">
             <div class="section-title">View Controls</div>
-
             <div class="sb-controls">
               <button class="ghost-btn" onclick="loadPrevEpisode()">이전화</button>
               <button class="ghost-btn" onclick="loadNextEpisode()">다음화</button>
@@ -1114,16 +1110,15 @@
 
           <div class="section-box cloud-box">
             <div class="section-title">Cloud Sync</div>
-
             <div class="toggle-copy">
               <strong>기기간 진행도 공유</strong>
-              <span>Firebase 프로젝트를 연결하면 iPhone, iPad, Mac에서 같은 계정으로 진행도를 동기화합니다.</span>
+              <span>Firebase 프로젝트를 연결하면 기기 간 진행도를 동기화합니다.</span>
             </div>
             <input id="cloud-email" placeholder="로그인 이메일">
             <input id="cloud-password" type="password" placeholder="비밀번호">
             <div id="cloud-advanced" class="cloud-advanced">
               <input id="cloud-api-key" placeholder="Firebase API Key">
-              <input id="cloud-auth-domain" placeholder="Auth Domain (예: xxx.firebaseapp.com)">
+              <input id="cloud-auth-domain" placeholder="Auth Domain">
               <input id="cloud-project-id" placeholder="Project ID">
               <input id="cloud-app-id" placeholder="App ID">
             </div>
@@ -1137,12 +1132,8 @@
               <button class="small-btn" onclick="cloudRegister()">회원가입</button>
             </div>
             <div id="cloud-status">클라우드 비연결</div>
-            <div class="cloud-note">프로젝트 설정은 한 번만 저장하면 이후에는 이메일과 비밀번호만 입력하면 됩니다.</div>
           </div>
         </div>
-
-      </div>
-
         <div class="sidebar-page episodes-page" id="sidebar-page-episodes">
           <div class="episodes-head">
             <strong>회차 목록</strong>
@@ -1150,7 +1141,7 @@
           </div>
           <div id="ep-list"></div>
         </div>
-      </div>
+        </div>
     </div>
   </aside>
 
@@ -1548,7 +1539,7 @@ async function startReading(mode) {
   document.getElementById('mode-select').classList.remove('visible');
 
   appMode = mode === 'webtoon' ? 'webtoon' : 'manga';
-  curMode = mode;
+  curMode = mode; 
   document.body.classList.toggle('app-mode-webtoon', appMode === 'webtoon');
 
   try {
@@ -1558,34 +1549,25 @@ async function startReading(mode) {
     epKeys           = [];
     episodePaths     = {};
 
-// 1. 선택한 작품의 하위 폴더(회차 폴더) 목록 가져오기
-const xml = await webdavPropfind(selectedWork.webdavPath, 1);
-const responses = xml.getElementsByTagNameNS("*", "response");
+    const xml = await webdavPropfind(selectedWork.webdavPath, 1);
+    const responses = xml.getElementsByTagNameNS("*", "response");
 
-for (let i = 1; i < responses.length; i++) {
-  const href = responses[i].getElementsByTagNameNS("*", "href")[0].textContent;
-  if (responses[i].getElementsByTagNameNS("*", "collection").length > 0) {
-    const folderName = decodeURIComponent(href).split('/').filter(Boolean).pop();
-    
-    // 'episode_' 뒤의 숫자를 찾거나, 없으면 문자열 맨 마지막에 위치한 숫자를 추출합니다.
-    let match = folderName.match(/episode_(\d+)/i);
-    if (!match) {
-      match = folderName.match(/\d+(?=\D*$)/); 
+    for (let i = 1; i < responses.length; i++) {
+      const href = responses[i].getElementsByTagNameNS("*", "href")[0].textContent;
+      if (responses[i].getElementsByTagNameNS("*", "collection").length > 0) {
+        const folderName = decodeURIComponent(href).split('/').filter(Boolean).pop();
+        let match = folderName.match(/episode_(\d+)/i) || folderName.match(/\d+(?=\D*$)/); 
+        if (match) {
+          const epNum = parseInt(match[1] || match[0], 10);
+          epKeys.push(epNum);
+          episodePaths[epNum] = href;
+        }
+      }
     }
-
-    if (match) {
-      // 정규식 그룹(match[1])이 있으면 그것을, 없으면 전체 매치(match[0])를 사용
-      const epNum = parseInt(match[1] || match[0], 10);
-      epKeys.push(epNum);
-      episodePaths[epNum] = href;
-    }
-  }
-}
-
-    epKeys.sort((a, b) => a - b); // 숫자 순 오름차순 정렬
+    epKeys.sort((a, b) => a - b);
 
     if (!epKeys.length) {
-      alert('회차 폴더를 찾을 수 없어요. (폴더 이름에 1, 2 같은 숫자가 포함되어야 합니다)');
+      alert('회차 폴더를 찾을 수 없어요.');
       return;
     }
 
@@ -1602,15 +1584,15 @@ for (let i = 1; i < responses.length; i++) {
 
     const saved = getCurrentProgress();
     if (saved && episodePaths[saved.ep]) {
-      const resumePage = saved.page || spreadToLastPage(saved.ep, saved.pair || 0);
-      if (appMode !== 'webtoon') curMode = saved.mode || curMode;
-      syncModeButtons();
+      const resumePage = saved.page || 1;
+      curMode = mode; // 과거 기록 무시, 현재 클릭한 모드 강제 적용
+      
       if (curMode === 'webtoon') {
         loadEp(saved.ep, 0, { preserveMode: true, page: resumePage, restoreWebtoonPage: true });
       } else {
-        loadEp(saved.ep, 0, { preserveMode: true, page: resumePage });
+        const resumePair = pageToPair(saved.ep, resumePage);
+        loadEp(saved.ep, resumePair, { preserveMode: true, page: resumePage });
       }
-      showToast(getResumeToast(saved));
     } else {
       loadEp(epKeys[0], 0, { preserveMode: true });
     }
@@ -1618,7 +1600,6 @@ for (let i = 1; i < responses.length; i++) {
     alert('작품을 여는 중 오류가 발생했어요: ' + err.message);
   }
 }
-
 /* ════════════════════════════════════════════════════════
    홈으로 돌아가기
 ════════════════════════════════════════════════════════ */
@@ -1716,8 +1697,12 @@ async function loadEp(ep, pair=0, options={}) {
   const { preserveMode=false, page=null, restoreWebtoonPage=false } = options;
   const token = ++episodeLoadToken;
 
-  if (appMode === 'webtoon') curMode = 'webtoon';
-  else if (!preserveMode) { const sv = getCurrentProgress(); if (sv?.mode) curMode = sv.mode; }
+  if (appMode === 'webtoon') {
+    curMode = 'webtoon';
+  } else {
+    // 만화 모드일 때는 무조건 양면/단면 책 방식인 'spread'로 강제 고정합니다.
+    curMode = 'spread'; 
+  }
   
   if (curEp !== null) document.getElementById(`ei-${curEp}`)?.classList.remove('active');
   curEp = ep; curPair = pair; curPage = page||1;
@@ -1731,8 +1716,8 @@ async function loadEp(ep, pair=0, options={}) {
   if (curMode === 'spread') {
     await ensureEpisodeSpreadLayout(ep);
     if (token !== episodeLoadToken) return;
-    const spreads = getSpreads(episodes[ep], ep);
     curPair = page ? pageToPair(ep, page) : pair;
+    const spreads = getSpreads(episodes[ep], ep);
     if (curPair >= spreads.length) curPair = Math.max(0, spreads.length-1);
   }
   
@@ -1740,10 +1725,12 @@ async function loadEp(ep, pair=0, options={}) {
   document.getElementById('end-screen').classList.remove('visible');
   syncModeButtons();
   
-  if (curMode === 'webtoon') renderWebtoonReader(ep, { page, restoreWebtoonPage });
-  else drawSpread();
+  if (curMode === 'webtoon') {
+    renderWebtoonReader(ep, { page, restoreWebtoonPage });
+  } else {
+    drawSpread();
+  }
 }
-
 function syncModeButtons() {
   document.getElementById('hud-first-single').style.display = curMode==='spread'&&appMode!=='webtoon'?'grid':'none';
   spreadReader.style.display    = curMode==='spread'?'flex':'none';
@@ -1910,21 +1897,12 @@ async function loadWebtoonFrame(frame, ep, page) {
 }
 function unloadWebtoonFrame(frame) {
   const ep = +frame.dataset.ep;
-  let minEp, maxEp;
-  if (appMode === 'webtoon') {
-    minEp = curEp - WEBTOON_EPISODE_KEEP_BEHIND;
-    maxEp = curEp; 
-  } else {
-    if (!webtoonRenderedEpisodes.length) return;
-    minEp = Math.min(...webtoonRenderedEpisodes) - WEBTOON_EPISODE_KEEP_BEHIND;
-    maxEp = Math.max(...webtoonRenderedEpisodes) + WEBTOON_EPISODE_KEEP_AHEAD;
-  }
-  if (ep < minEp || ep > maxEp) {
+  // 만화 모드와 격리되어 현재 읽는 화(curEp)가 아니면 가차없이 메모리를 완전히 비웁니다.
+  if (ep !== curEp) {
     const img = frame.querySelector('img');
     if (img) {
       img.onload = null;
       img.onerror = null;
-      /* [발열 최적화] 메모리를 확실히 비우기 위해 src 속성을 제거 */
       img.removeAttribute('src'); 
     }
     frame.classList.remove('loaded');
@@ -1939,87 +1917,28 @@ function scheduleWebtoonProgress() {
 
 function updateWebtoonProgress() {
   if (!webtoonVisible.size) return;
-  let bestEp = curEp, bestPage = -1;
+  let bestPage = -1;
   webtoonVisible.forEach(({ep, page}) => {
-    if (ep === curEp && page > bestPage) { bestPage = page; bestEp = ep; }
+    if (ep === curEp && page > bestPage) { bestPage = page; }
   });
-  if (bestPage < 0) {
-    webtoonVisible.forEach(({ep, page}) => {
-      if (page > bestPage || (page === bestPage && ep > bestEp)) { bestPage = page; bestEp = ep; }
-    });
-  } else {
-    const curEpFiles = episodes[curEp]?.length || 0;
-    if (bestPage >= curEpFiles) {
-      webtoonVisible.forEach(({ep, page}) => {
-        if (ep > bestEp) { bestEp = ep; bestPage = page; }
-      });
-    }
-  }
-  if (bestEp && bestPage > 0) {
-    if (bestEp !== curEp) {
-      document.getElementById(`ei-${curEp}`)?.classList.remove('active');
-      curEp = bestEp;
-      document.getElementById(`ei-${curEp}`)?.classList.add('active');
-    }
+  if (bestPage > 0) {
     curPage = bestPage;
-    updateHUD(); saveCurrentProgress();
+    updateHUD(); 
+    saveCurrentProgress();
   }
 }
 
 function scheduleWebtoonPrefetch(ep) {
-  if (webtoonAppendRaf) return;
-  webtoonAppendRaf = requestAnimationFrame(async () => {
-    webtoonAppendRaf = 0;
-    for (let i=1; i<=WEBTOON_AUTOPREFETCH_AHEAD; i++) {
-      const nextEp = epKeys[epKeys.indexOf(ep)+i];
-      if (!nextEp) continue;
-
-      if (appMode === 'webtoon') {
-        continue;
-      }
-
-      if (document.getElementById(`wi-${nextEp}`)) {
-        webtoonAutoloaded.add(nextEp);
-        if (!webtoonRenderedEpisodes.includes(nextEp)) webtoonRenderedEpisodes.push(nextEp);
-        continue;
-      }
-      if (webtoonAutoloaded.has(nextEp)) continue;
-      const ready = await ensureEpisodeReady(nextEp);
-      if (!ready) continue;
-      if (webtoonAutoloaded.has(nextEp) || document.getElementById(`wi-${nextEp}`)) {
-        webtoonAutoloaded.add(nextEp);
-        if (!webtoonRenderedEpisodes.includes(nextEp)) webtoonRenderedEpisodes.push(nextEp);
-        continue;
-      }
-      webtoonAutoloaded.add(nextEp);
-      if (!webtoonRenderedEpisodes.includes(nextEp)) {
-        webtoonRenderedEpisodes.push(nextEp);
-        renderWebtoonEpisodeBlock(nextEp);
-        pruneWebtoonEpisodeBlocks();
-      }
-    }
-  });
+  // 만화 모드 내부의 웹툰 기능이 제거되었으므로 무거운 연쇄 로딩 기능을 비워두어 무력화합니다.
 }
 
 function pruneWebtoonEpisodeBlocks() {
-  if (!webtoonRenderedEpisodes.length) return;
   const blocks = webtoonStack.querySelectorAll('.episode-block');
-  let minKeep, maxKeep;
-  if (appMode === 'webtoon') {
-    minKeep = curEp - WEBTOON_EPISODE_KEEP_BEHIND;
-    maxKeep = curEp + 0; 
-  } else {
-    const minRendered = Math.min(...webtoonRenderedEpisodes);
-    const maxRendered = Math.max(...webtoonRenderedEpisodes);
-    minKeep = minRendered - WEBTOON_EPISODE_KEEP_BEHIND;
-    maxKeep = maxRendered + WEBTOON_EPISODE_KEEP_AHEAD;
-  }
   blocks.forEach(block => {
     const ep = +block.dataset.ep;
-    if (ep < minKeep || ep > maxKeep) {
+    // 현재 회차가 아닌 예전 회차 박스는 DOM 구조에서 완전히 삭제하여 가볍게 유지합니다.
+    if (ep !== curEp) {
       block.remove();
-      const idx = webtoonRenderedEpisodes.indexOf(ep);
-      if (idx > -1) webtoonRenderedEpisodes.splice(idx, 1);
     }
   });
 }
@@ -2215,11 +2134,21 @@ function getEntryPath(file) { return file?.name || ''; }
 async function setImageSource(img, file, token) {
   try {
     if (token !== spreadRenderToken) return;
-    img.onload  = () => { if (token===spreadRenderToken) img.classList.add('ready'); };
-    img.onerror = () => { img.classList.remove('ready'); console.warn('spread image load failed:', file?.name||file?.entryName); };
-    // [수정] 단행본(책) 모드에서도 꼬리표를 붙여줍니다.
+    
+    img.onload  = () => { 
+      if (token === spreadRenderToken) img.classList.add('ready'); 
+    };
+    
+    // 에러 발생 시에도 'ready' 클래스를 추가해 엑스박스 아이콘이라도 뜨도록 처리 (원인 파악용)
+    img.onerror = () => { 
+      if (token === spreadRenderToken) img.classList.add('ready'); 
+      console.warn('spread image load failed:', file?.name); 
+    };
+    
     img.src = file.url + '?auth=' + encodeURIComponent(ncConfig.authHeader);
-  } catch(e) { console.warn(e); }
+  } catch(e) { 
+    console.warn(e); 
+  }
 }
 
 
