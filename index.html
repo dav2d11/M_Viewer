@@ -1706,6 +1706,13 @@ function goHome() {
   flushCurrentProgress();
   if (cloud.user) syncCloudNow(true);
 
+  // ▼ [여기에 추가] 만화 모드(스프레드)에 남아있는 이전 이미지의 잔상을 깨끗하게 지웁니다. ▼
+  const imgR = document.getElementById('img-r');
+  const imgL = document.getElementById('img-l');
+  if (imgR) { imgR.removeAttribute('src'); imgR.classList.remove('ready'); }
+  if (imgL) { imgL.removeAttribute('src'); imgL.classList.remove('ready'); }
+  // ▲ 여기까지 ▲
+
   zipArchiveCache   = new Map();
   imageMetaCache    = new Map();
   episodeSpreadCache= new Map(); episodeSpreadLayoutPending = new Map();
