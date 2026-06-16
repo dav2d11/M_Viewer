@@ -1343,7 +1343,13 @@ let loadedThumbsCount = 0;
 function updateSplashProgress() {
   if (isSplashHidden) return;
   loadedThumbsCount++;
-  const pct = totalInitialThumbs > 0 ? Math.min(100, Math.round((loadedThumbsCount / totalInitialThumbs) * 100)) : 100;
+
+  // 방어 코드: 로딩해야 할 개수보다 카운트가 초과되지 않도록 고정
+  if (loadedThumbsCount > totalInitialThumbs) {
+    loadedThumbsCount = totalInitialThumbs;
+  }
+
+  const pct = totalInitialThumbs > 0 ? Math.round((loadedThumbsCount / totalInitialThumbs) * 100) : 100;
 
   const bar  = document.getElementById('splash-progress-bar');
   const text = document.getElementById('splash-progress-text');
@@ -1351,7 +1357,7 @@ function updateSplashProgress() {
   if (text) text.textContent = `${pct}%`;
 
   if (pct >= 100) {
-    setTimeout(hideSplashScreen, 300); // 100% 도달 후 0.3초 뒤 부드럽게 화면 넘김
+    setTimeout(hideSplashScreen, 400); // 100% 채워진 바를 잠깐(0.4초) 보여준 뒤 닫음
   }
 }
 
@@ -1571,8 +1577,8 @@ async function renderHomeScreen() {
     }
   });
 
-  // 4. 안전장치: 네트워크가 너무 느리거나 에러가 나더라도 최대 3.5초 뒤에는 무조건 접속
-  setTimeout(hideSplashScreen, 3500);
+  // 4. 안전장치: 썸네일 다운로드가 길어져도 스플래시 화면이 기다리도록 15초로 대폭 연장
+  setTimeout(hideSplashScreen, 15000);
 }
 
 // ▼ 스크롤해서 화면에 보일 때만 이미지를 로딩하는 감시자 생성 ▼
