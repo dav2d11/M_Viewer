@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="만화뷰어">
 <title>만화 뷰어</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjMGIwZDEwIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNTAiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjZmY2YjM1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4uVjwvdGV4dD48L3N2Zz4=">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjMGIwZDEwIi8+PHRleHQgeD0iNTAiIHk9IjY4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNTAiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjZmY2YjM1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4uVjwvdGV4dD48L3N2Zz4=">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
@@ -841,6 +843,16 @@
     background: #111;
     border: 1px solid rgba(255,255,255,0.05);
     contain: layout style;
+    /* 로딩 중일 때 보여줄 애니메이션 배경 추가 */
+    background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%);
+    background-size: 200% 100%;
+    animation: loadingShimmer 1.5s infinite;
+    min-height: 300px; /* 초기 높이 보장 */
+  }
+  .webtoon-frame.loaded { animation: none; background: #111; min-height: 0; }
+  @keyframes loadingShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
   body.app-mode-webtoon .webtoon-frame {
   border: none; border-radius: 0; overflow: visible; background: transparent;
@@ -982,8 +994,13 @@
 <body>
 
   <div id="splash-screen" style="display: none; position: fixed; inset: 0; z-index: 999; background: #090b0d; flex-direction: column; align-items: center; justify-content: center;">
-  <div class="home-logo" style="font-size: 42px; margin-bottom: 24px; animation: riseIn 0.5s ease;">MANGA<span style="color: var(--accent);">.</span>VIEWER</div>
-  <div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+  <div class="home-logo" style="font-size: 42px; margin-bottom: 20px; animation: riseIn 0.5s ease; color: #fff; font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.1em;">
+    .viewer
+  </div>
+  <div style="width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; margin-bottom: 10px;">
+    <div id="splash-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 0.3s ease;"></div>
+  </div>
+  <div id="splash-progress-text" style="font-size: 12px; color: var(--text-3); font-family: monospace;">0%</div>
 </div>
 <style>
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -1320,6 +1337,23 @@ let selectedWork = null;
 
 // ▼ [추가] 스플래시 화면 상태를 관리하는 변수와 함수
 let isSplashHidden = false;
+let totalInitialThumbs = 0;
+let loadedThumbsCount = 0;
+
+function updateSplashProgress() {
+  if (isSplashHidden) return;
+  loadedThumbsCount++;
+  const pct = totalInitialThumbs > 0 ? Math.min(100, Math.round((loadedThumbsCount / totalInitialThumbs) * 100)) : 100;
+
+  const bar  = document.getElementById('splash-progress-bar');
+  const text = document.getElementById('splash-progress-text');
+  if (bar)  bar.style.width = `${pct}%`;
+  if (text) text.textContent = `${pct}%`;
+
+  if (pct >= 100) {
+    setTimeout(hideSplashScreen, 300); // 100% 도달 후 0.3초 뒤 부드럽게 화면 넘김
+  }
+}
 
 function hideSplashScreen() {
   if (isSplashHidden) return; // 이미 숨겼다면 무시
@@ -1327,13 +1361,13 @@ function hideSplashScreen() {
   
   const splash = document.getElementById('splash-screen');
   if (splash) {
-    // 0.2초 동안 부드럽게 투명해지며 사라짐
-    splash.style.transition = 'opacity 0.2s ease';
+    // 0.3초 동안 부드럽게 투명해지며 사라짐
+    splash.style.transition = 'opacity 0.3s ease';
     splash.style.opacity = '0';
     setTimeout(() => { 
       splash.style.display = 'none'; 
       splash.style.opacity = '1'; // 다음을 위해 원상복구
-    }, 200);
+    }, 300);
   }
 }
 
@@ -1517,14 +1551,28 @@ async function renderHomeScreen() {
   // 2. 순서 재배열
   updateGridOrderAndText();
 
-  // 3. 화면 노출 감지기(Observer)를 썸네일 박스들에 부착
-  const thumbs = document.querySelectorAll('.work-thumb');
-  thumbs.forEach(thumb => thumbnailObserver.observe(thumb));
-
-  // 4. [변경] 즉시 끄지 않고 상태를 초기화한 뒤 안전장치(타이머)를 켭니다.
-  // 캐시 로딩이 꼬여서 무한 대기하는 걸 막기 위해, 최대 0.6초 뒤에는 무조건 끕니다.
+  // 3. 진행률 연동을 위해 화면에 먼저 보일 상위 12개는 즉시 강제 로드, 나머지는 Observer로 지연 로드
+  const visibleLimit = Math.min(12, worksList.length);
+  totalInitialThumbs = visibleLimit;
+  loadedThumbsCount = 0;
   isSplashHidden = false;
-  setTimeout(hideSplashScreen, 600);
+
+  const progressBar  = document.getElementById('splash-progress-bar');
+  const progressText = document.getElementById('splash-progress-text');
+  if (progressBar)  progressBar.style.width = '0%';
+  if (progressText) progressText.textContent = '로딩 준비 중...';
+
+  const thumbs = document.querySelectorAll('.work-thumb');
+  thumbs.forEach((thumb, idx) => {
+    if (idx < visibleLimit) {
+      loadThumbnailLazy(worksList[thumb.dataset.index], thumb, thumb.dataset.index, true);
+    } else {
+      thumbnailObserver.observe(thumb);
+    }
+  });
+
+  // 4. 안전장치: 네트워크가 너무 느리거나 에러가 나더라도 최대 3.5초 뒤에는 무조건 접속
+  setTimeout(hideSplashScreen, 3500);
 }
 
 // ▼ 스크롤해서 화면에 보일 때만 이미지를 로딩하는 감시자 생성 ▼
@@ -1551,7 +1599,7 @@ const thumbnailObserver = new IntersectionObserver((entries, observer) => {
 
 // ▼ 개별 썸네일 로딩 로직 ▼
 // ▼ [변경] Cache Storage API를 사용하여 이미지 자체를 기기에 영구 캐싱합니다.
-async function loadThumbnailLazy(work, thumbEl, index) {
+async function loadThumbnailLazy(work, thumbEl, index, isInitial = false) {
   const img = document.createElement('img');
   const extensions = ['jpg', 'png', 'jpeg', 'webp'];
   
@@ -1567,8 +1615,13 @@ async function loadThumbnailLazy(work, thumbEl, index) {
       URL.revokeObjectURL(img.src);
     }
     
-    // ▼ [추가] 눈에 보이는 첫 번째 이미지가 로딩 완료되는 즉시 스플래시를 끕니다!
-    hideSplashScreen();
+    // ▼ [변경] 초기 화면(상위 12개) 로딩 대상일 경우 진행률 카운트 증가, 아니면 별도 처리 없음
+    if (isInitial) {
+      updateSplashProgress();
+    }
+  };
+  img.onerror = () => {
+    if (isInitial) updateSplashProgress();
   };
 
   // 2. 이미 성공했던 확장자 정보가 로컬스토리지에 저장되어 있는 경우
@@ -1618,6 +1671,9 @@ async function loadThumbnailLazy(work, thumbEl, index) {
       // 에러 발생 시(파일 없음 등) 다음 확장자로 자연스럽게 넘어감
     }
   }
+
+  // 모든 확장자를 시도했지만 썸네일을 찾지 못한 경우에도 진행률은 계속 진행되도록 처리
+  if (isInitial) updateSplashProgress();
 }
 
 function updateGridOrderAndText() {
@@ -2341,8 +2397,28 @@ function spreadToLastPage(ep, pair) {
 ════════════════════════════════════════════════════════ */
 async function ensureEpisodeReady(ep) {
   if (episodes[ep]?.length) return true; 
-  if (!episodePaths[ep]) return false;
 
+  const cacheKey = `manga_files_${currentMangaId}_${ep}`;
+  const cachedFiles = localStorage.getItem(cacheKey);
+
+  // 1. 저장된 캐시가 있다면 네트워크를 기다리지 않고 즉시 렌더링 승인 (속도 혁신)
+  if (cachedFiles) {
+    try {
+      episodes[ep] = JSON.parse(cachedFiles);
+      renderList();
+      // 백그라운드에서 조용히 최신 파일 상태를 동기화
+      fetchLatestEpisodeFiles(ep, cacheKey);
+      return true;
+    } catch(e) {}
+  }
+
+  // 2. 캐시가 없는 첫 접속일 경우에만 서버에서 받아옴
+  if (!episodePaths[ep]) return false;
+  return await fetchLatestEpisodeFiles(ep, cacheKey);
+}
+
+// 백그라운드 통신 전용 분리 함수
+async function fetchLatestEpisodeFiles(ep, cacheKey) {
   try {
     const xml = await webdavPropfind(episodePaths[ep], 1);
     const responses = xml.getElementsByTagNameNS("*", "response");
@@ -2356,7 +2432,9 @@ async function ensureEpisodeReady(ep) {
       }
     }
     files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    
     episodes[ep] = files;
+    localStorage.setItem(cacheKey, JSON.stringify(files)); // 캐시에 저장
     renderList();
     return true;
   } catch (e) {
