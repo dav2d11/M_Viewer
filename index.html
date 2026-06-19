@@ -325,6 +325,23 @@
     transition: width 0.4s ease;
   }
 
+  .up-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: #ffffff;
+    color: var(--accent); /* 주황색 텍스트 */
+    font-size: 11px;
+    font-family: 'Bebas Neue', 'Noto Sans KR', sans-serif;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 6px;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    letter-spacing: 0.05em;
+  }
+
   .work-info {
     padding: 10px 10px 12px;
   }
@@ -1498,17 +1515,37 @@ async function connectNextcloud(isBackground = false) {
     const responses = xml.getElementsByTagNameNS("*", "response");
     const newWorksList = [];
     
+    const isFirstLoad = worksList.length === 0 && !localStorage.getItem(WORKS_META_KEY);
+
     for (let i = 1; i < responses.length; i++) {
       const href = responses[i].getElementsByTagNameNS("*", "href")[0].textContent;
       if (responses[i].getElementsByTagNameNS("*", "collection").length > 0) {
         const name = decodeURIComponent(href).split('/').filter(Boolean).pop();
         
-        // 기존 캐시에 저장된 썸네일 경로가 있다면 유지, 없으면 기본값 세팅
+        // WebDAV에서 폴더의 최근 수정일을 가져옵니다
+        const modNodes = responses[i].getElementsByTagNameNS("*", "getlastmodified");
+        const lastModTime = modNodes.length > 0 ? new Date(modNodes[0].textContent).getTime() : Date.now();
+
         const existingWork = worksList.find(w => w.name === name);
+        let hasNewUpdates = false;
+
+        if (!existingWork) {
+          // 최초 로드 시(모든 작품이 신규인 경우)에는 배지를 도배하지 않고, 이후 추가된 작품에만 배지를 답니다.
+          hasNewUpdates = !isFirstLoad; 
+        } else {
+          // 사용자가 아직 안 읽어서 남아있는 UP 상태를 유지하거나, 새로운 수정이 감지되면 UP 처리
+          hasNewUpdates = existingWork.hasNewUpdates || false;
+          if (existingWork.lastModified && lastModTime > existingWork.lastModified) {
+            hasNewUpdates = true;
+          }
+        }
+        
         newWorksList.push({ 
           name, 
           webdavPath: href, 
-          thumbnail: existingWork?.thumbnail || null 
+          thumbnail: existingWork?.thumbnail || null,
+          lastModified: lastModTime,
+          hasNewUpdates
         });
       }
     }
@@ -1685,54 +1722,74 @@ async function loadThumbnailLazy(work, thumbEl, index, isInitial = false) {
 function updateGridOrderAndText() {
   const progressStore = readProgressStore();
   
-  // 1. 순서를 계산하기 위해 worksList의 인덱스와 진행도 데이터를 매핑
+  // 1. 순서와 상태 계산
   const orderData = worksList.map((work, index) => {
     const mangaId = 'manga_' + hashString(work.name.trim().toLowerCase());
     const prog = progressStore[mangaId];
     
-    // 그룹 분류: 0 = 보고있는 것(진행중), 1 = 안 본 것, 2 = 다 본 것(완독)
-    const group = !prog ? 1 : (prog.isCompleted ? 2 : 0);
+    // 완독 무시 처리: 새 업데이트(UP)가 있으면 완독이 아닌 것으로 취급
+    let isCompleted = prog ? prog.isCompleted : false;
+    if (work.hasNewUpdates) isCompleted = false;
+
+    // 그룹 분류: -1 = 새 업데이트(UP), 0 = 보고있는 것, 1 = 안 본 것, 2 = 다 본 것
+    let group = !prog ? 1 : (isCompleted ? 2 : 0);
+    if (work.hasNewUpdates) group = -1; // 무엇이든 최상단으로 강제 이동
+
     const updated = prog ? (prog.updatedAt || 0) : 0;
-    return { index, group, updated, name: work.name };
+    return { index, group, updated, name: work.name, lastMod: work.lastModified || 0, isCompleted };
   });
 
-  // 2. 정렬 규칙 적용 (그룹별 -> 최근 읽은 순 or 이름 순)
+  // 2. 정렬 규칙 적용 (그룹별 -> 최근 수정일/읽은 순 -> 이름 순)
   orderData.sort((a, b) => {
-    if (a.group !== b.group) return a.group - b.group; // 그룹 우선 정렬
-    if (a.group === 0 || a.group === 2) return b.updated - a.updated; // 진행중, 완독은 최근 읽은 순서대로
-    return a.name.localeCompare(b.name); // 안 본 작품은 이름(가나다) 순서대로
+    if (a.group !== b.group) return a.group - b.group;
+    if (a.group === -1) return b.lastMod - a.lastMod; // UP 항목은 최신 업데이트 순서
+    if (a.group === 0 || a.group === 2) return b.updated - a.updated;
+    return a.name.localeCompare(b.name); 
   });
 
-  // 3. 정렬된 결과에 따라 원래 인덱스에 순위(order) 부여
   const orderMapping = {};
   orderData.forEach((data, rank) => { orderMapping[data.index] = rank; });
 
-  // 4. DOM을 파괴하지 않고 CSS 'order' 속성만 변경하여 시각적 순서 변경
+  // 3. UI 갱신
   worksList.forEach((work, i) => {
     const card = document.querySelector(`.home-grid .work-card:nth-child(${i+1})`);
     if (!card) return;
     
-    card.style.order = orderMapping[i]; // 카드 순서 적용
+    card.style.order = orderMapping[i];
     
-    // 텍스트 및 UI 색상 갱신
     const mangaId = 'manga_' + hashString(work.name.trim().toLowerCase());
     const prog = progressStore[mangaId];
     const epCountEl = card.querySelector('.work-ep-count');
     
-    if (prog) {
-      if (prog.isCompleted) {
-        epCountEl.textContent = '완독 🎉';
-        epCountEl.style.color = 'var(--accent)';
-        epCountEl.style.fontWeight = '700';
-      } else {
-        epCountEl.textContent = `최근: ${prog.ep}화`;
-        epCountEl.style.color = 'var(--text-3)';
-        epCountEl.style.fontWeight = 'normal';
-      }
+    // 텍스트 및 완독 배지 처리
+    let isCompleted = prog ? prog.isCompleted : false;
+    if (work.hasNewUpdates) isCompleted = false;
+
+    if (isCompleted) {
+      epCountEl.textContent = '완독 🎉';
+      epCountEl.style.color = 'var(--accent)';
+      epCountEl.style.fontWeight = '700';
+    } else if (prog) {
+      epCountEl.textContent = `최근: ${prog.ep}화`;
+      epCountEl.style.color = 'var(--text-3)';
+      epCountEl.style.fontWeight = 'normal';
     } else {
       epCountEl.textContent = '클릭하여 보기';
       epCountEl.style.color = 'var(--text-3)';
       epCountEl.style.fontWeight = 'normal';
+    }
+
+    // 좌상단 UP 배지 렌더링
+    let upBadge = card.querySelector('.up-badge');
+    if (work.hasNewUpdates) {
+      if (!upBadge) {
+        upBadge = document.createElement('div');
+        upBadge.className = 'up-badge';
+        upBadge.textContent = 'UP';
+        card.querySelector('.work-thumb').appendChild(upBadge);
+      }
+    } else if (upBadge) {
+      upBadge.remove();
     }
   });
 }
@@ -1743,6 +1800,20 @@ function updateGridOrderAndText() {
 ════════════════════════════════════════════════════════ */
 function selectWork(index) {
   selectedWork = worksList[index];
+
+  // 작품을 클릭하면 UP 상태를 즉시 해제하고 로컬 캐시에 저장합니다
+  if (selectedWork.hasNewUpdates) {
+    selectedWork.hasNewUpdates = false;
+    localStorage.setItem(WORKS_META_KEY, JSON.stringify(worksList));
+
+    // UI에서도 배지를 바로 지워줍니다
+    const card = document.querySelector(`.home-grid .work-card:nth-child(${index+1})`);
+    if (card) {
+      const upBadge = card.querySelector('.up-badge');
+      if (upBadge) upBadge.remove();
+    }
+  }
+
   const sheet  = document.getElementById('mode-select');
   const titleEl= document.getElementById('mode-sheet-title');
   const epEl   = document.getElementById('mode-sheet-ep');
